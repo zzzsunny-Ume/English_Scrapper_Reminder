@@ -1,0 +1,17 @@
+name = "english-review-push-relay"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 매일 UTC 22:00 = 한국시간(KST, UTC+9) 다음날 오전 7시에 실행.
+# 다른 시각을 원하면 cron 표현식을 바꾸세요 (분 시 일 월 요일, 전부 UTC 기준).
+[triggers]
+crons = ["0 22 * * *"]
+
+# 아래 값들은 절대 여기 파일에 직접 쓰지 말고, 반드시 시크릿으로 등록하세요:
+#   wrangler secret put VAPID_SUBJECT
+#   wrangler secret put VAPID_PUBLIC_KEY
+#   wrangler secret put VAPID_PRIVATE_KEY
+#   wrangler secret put APPS_SCRIPT_URL
+#   wrangler secret put APPS_SCRIPT_SECRET
+# 자세한 값/발급 방법은 worker/README.md 참고

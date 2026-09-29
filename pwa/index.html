@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>영어표현 복습</title>
+<meta name="description" content="망각곡선 기반 영어 표현 스페이스드 리피티션 복습 앱" />
+<meta name="theme-color" content="#4f46e5" />
+<link rel="manifest" href="./manifest.json" />
+<link rel="icon" href="./icons/icon-192.png" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="영어복습" />
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --primary: #4f46e5;
+    --primary-dark: #4338ca;
+    --bg: #f4f5fb;
+    --card: #ffffff;
+    --text: #1f2333;
+    --muted: #6b7280;
+    --good: #16a34a;
+    --bad: #dc2626;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app-root { min-height: 100vh; display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+
+  /* ---------- 로그인 화면 ---------- */
+  #login-screen {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 32px 20px; text-align: center; gap: 20px;
+    background: linear-gradient(160deg, var(--primary), #6366f1 60%, #818cf8);
+    color: white;
+  }
+  #login-screen .logo { font-size: 56px; }
+  #login-screen h1 { margin: 0; font-size: 22px; }
+  #login-screen p { margin: 0; opacity: 0.9; font-size: 14px; line-height: 1.6; max-width: 320px; }
+  #google-signin-btn { margin-top: 8px; }
+  #login-error { color: #fecaca; font-size: 13px; min-height: 18px; }
+
+  /* ---------- 공통 헤더 ---------- */
+  header.app-header {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--primary); color: white;
+    padding: 12px 16px calc(12px + env(safe-area-inset-top, 0px));
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  header.app-header .title { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 6px; }
+  header.app-header .header-actions { display: flex; gap: 6px; align-items: center; }
+  .icon-btn {
+    background: rgba(255,255,255,0.15); border: none; color: white; border-radius: 10px;
+    width: 34px; height: 34px; font-size: 16px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .icon-btn.active { background: white; color: var(--primary); }
+
+  main { flex: 1; padding: 16px; padding-bottom: 32px; max-width: 480px; width: 100%; margin: 0 auto; }
+
+  /* ---------- 카드 공통 ---------- */
+  .card {
+    background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid var(--border);
+  }
+
+  /* ---------- 통계 바 ---------- */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat-box { text-align: center; padding: 10px 4px; }
+  .stat-box .num { font-size: 20px; font-weight: 800; color: var(--primary); }
+  .stat-box .label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  select#source-select {
+    width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border);
+    font-size: 15px; background: white; margin-top: 8px;
+  }
+
+  .primary-btn {
+    width: 100%; padding: 14px; border-radius: 14px; border: none; background: var(--primary);
+    color: white; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .secondary-btn {
+    width: 100%; padding: 12px; border-radius: 14px; border: 1px solid var(--border); background: white;
+    color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+
+  .segmented { display: flex; background: #eef0fb; border-radius: 12px; padding: 3px; margin-top: 8px; }
+  .segmented button {
+    flex: 1; border: none; background: transparent; padding: 8px 4px; border-radius: 9px;
+    font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer;
+  }
+  .segmented button.active { background: white; color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  /* ---------- 퀴즈 화면 ---------- */
+  .progress-bar-track { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
+  .progress-bar-fill { height: 100%; background: var(--primary); transition: width 0.25s ease; }
+
+  .quiz-mode-badge {
+    display: inline-block; font-size: 11px; font-weight: 700; color: var(--primary);
+    background: #eef0fb; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  .quiz-prompt { font-size: 22px; font-weight: 700; line-height: 1.4; margin-bottom: 4px; word-break: keep-all; }
+  .quiz-subtext { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+
+  input.quiz-text-input {
+    width: 100%; padding: 14px; font-size: 17px; border-radius: 12px; border: 2px solid var(--border);
+    margin-bottom: 12px;
+  }
+  input.quiz-text-input:focus { outline: none; border-color: var(--primary); }
+  input.quiz-text-input.correct { border-color: var(--good); background: #f0fdf4; }
+  input.quiz-text-input.wrong { border-color: var(--bad); background: #fef2f2; }
+
+  .mc-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+  .mc-option {
+    text-align: left; padding: 14px; border-radius: 12px; border: 2px solid var(--border); background: white;
+    font-size: 15px; cursor: pointer;
+  }
+  .mc-option.correct { border-color: var(--good); background: #f0fdf4; }
+  .mc-option.wrong { border-color: var(--bad); background: #fef2f2; }
+  .mc-option:disabled { opacity: 0.7; }
+
+  .scramble-answer {
+    min-height: 48px; border: 2px dashed var(--border); border-radius: 12px; padding: 8px;
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; align-items: flex-start;
+  }
+  .scramble-bank { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .word-chip {
+    padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: #f8f9fc;
+    font-size: 14px; cursor: pointer; user-select: none;
+  }
+  .word-chip.picked { background: var(--primary); color: white; border-color: var(--primary); }
+
+  .flashcard-reveal { padding: 14px; background: #f8f9fc; border-radius: 12px; margin-bottom: 12px; font-size: 15px; line-height: 1.7; }
+  .flashcard-reveal .kr { font-weight: 700; font-size: 18px; }
+  .flashcard-reveal .en { color: var(--primary); font-weight: 700; }
+  .flashcard-reveal .ex { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  .quiz-feedback { min-height: 22px; font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+  .quiz-feedback.correct { color: var(--good); }
+  .quiz-feedback.wrong { color: var(--bad); }
+
+  .quiz-actions { display: flex; gap: 8px; }
+  .quiz-actions button { flex: 1; }
+
+  .self-grade-actions { display: flex; gap: 8px; }
+  .self-grade-actions button { flex: 1; padding: 14px; border-radius: 12px; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .btn-know { background: #dcfce7; color: var(--good); }
+  .btn-dont-know { background: #fee2e2; color: var(--bad); }
+
+  /* ---------- 세션 요약 ---------- */
+  .summary-emoji { font-size: 48px; text-align: center; margin-bottom: 8px; }
+  .summary-title { text-align: center; font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+  .summary-sub { text-align: center; font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+
+  /* ---------- 마일스톤 팝업 ---------- */
+  #milestone-overlay {
+    position: fixed; inset: 0; background: rgba(15, 15, 30, 0.55); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  #milestone-card {
+    background: white; border-radius: 20px; padding: 28px 22px; text-align: center; max-width: 320px;
+    animation: pop 0.35s ease;
+  }
+  @keyframes pop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #milestone-card .emoji { font-size: 52px; margin-bottom: 8px; }
+  #milestone-card h2 { margin: 0 0 6px; font-size: 20px; }
+  #milestone-card p { margin: 0 0 18px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+  footer.hint { text-align: center; font-size: 11px; color: var(--muted); padding: 8px 16px 20px; }
+</style>
+</head>
+<body>
+<div id="app-root">
+
+  <!-- ===== 로그인 화면 ===== -->
+  <div id="login-screen">
+    <div class="logo">📚</div>
+    <h1>영어표현 복습</h1>
+    <p>텔레그램 스터디방에서 모은 표현을 망각곡선에 맞춰 복습해요.<br />구글 계정으로 로그인하면 바로 시작할 수 있어요.</p>
+    <div id="google-signin-btn"></div>
+    <div id="login-error"></div>
+  </div>
+
+  <!-- ===== 메인 앱 ===== -->
+  <div id="main-app" class="hidden">
+    <header class="app-header">
+      <div class="title">📚 <span id="header-title-text">영어표현 복습</span></div>
+      <div class="header-actions">
+        <button id="push-toggle-btn" class="icon-btn" title="알림 설정">🔕</button>
+        <button id="logout-btn" class="icon-btn" title="로그아웃">↩︎</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- ---- 홈 화면 ---- -->
+      <div id="home-view">
+        <div class="card" id="stats-card">
+          <div class="stats-grid">
+            <div class="stat-box"><div class="num" id="stat-due">-</div><div class="label">오늘 복습</div></div>
+            <div class="stat-box"><div class="num" id="stat-streak">-</div><div class="label">🔥 연속일</div></div>
+            <div class="stat-box"><div class="num" id="stat-global">-</div><div class="label">누적 정복</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <label style="font-size:13px; font-weight:700; color:var(--muted);">복습 소스</label>
+          <select id="source-select"></select>
+
+          <label style="font-size:13px; font-weight:700; color:var(--muted); display:block; margin-top:14px;">복습 방식</label>
+          <div class="segmented" id="mode-pref-segmented">
+            <button data-pref="adaptive" class="active">적응형 (추천)</button>
+            <button data-pref="random">전체 랜덤</button>
+          </div>
+        </div>
+
+        <button id="start-review-btn" class="primary-btn">복습 시작하기</button>
+        <button id="install-btn" class="secondary-btn hidden" style="margin-top:10px;">📲 홈 화면에 추가</button>
+        <div id="ios-install-hint" class="hidden" style="text-align:center; font-size:12px; color:var(--muted); margin-top:10px;">
+          iOS는 공유 버튼 → "홈 화면에 추가"로 설치할 수 있어요.
+        </div>
+      </div>
+
+      <!-- ---- 퀴즈 화면 ---- -->
+      <div id="quiz-view" class="hidden">
+        <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill" style="width:0%"></div></div>
+        <div class="card" id="quiz-card"><!-- JS가 채움 --></div>
+      </div>
+
+      <!-- ---- 세션 요약 화면 ---- -->
+      <div id="summary-view" class="hidden">
+        <div class="card">
+          <div class="summary-emoji" id="summary-emoji">🎉</div>
+          <div class="summary-title" id="summary-title">복습 완료!</div>
+          <div class="summary-sub" id="summary-sub"></div>
+          <div class="stats-grid">
+            <div class="stat-box"><div class="num" id="summary-correct" style="color:var(--good);">-</div><div class="label">정답</div></div>
+            <div class="stat-box"><div class="num" id="summary-wrong" style="color:var(--bad);">-</div><div class="label">오답</div></div>
+            <div class="stat-box"><div class="num" id="summary-streak">-</div><div class="label">🔥 연속일</div></div>
+          </div>
+        </div>
+        <button id="back-home-btn" class="primary-btn">홈으로</button>
+      </div>
+    </main>
+
+    <footer class="hint">망각곡선(Leitner) 기반 스페이스드 리피티션 · 정답을 맞힐수록 복습 간격이 길어져요</footer>
+  </div>
+
+  <!-- ===== 마일스톤 축하 팝업 ===== -->
+  <div id="milestone-overlay" class="hidden">
+    <div id="milestone-card">
+      <div class="emoji" id="milestone-emoji">🔥</div>
+      <h2 id="milestone-title">7일 연속 학습!</h2>
+      <p id="milestone-desc">완전 꾸준하다... 이 기세 계속 가보자</p>
+      <button id="milestone-close-btn" class="primary-btn">계속하기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// ===== 설정 (배포 전 반드시 실제 값으로 교체) =====
+// ============================================================
+const API_BASE = 'REPLACE_WITH_YOUR_APPS_SCRIPT_WEB_APP_URL'; // 예: https://script.google.com/macros/s/AKfycb.../exec
+const GOOGLE_CLIENT_ID = 'REPLACE_WITH_YOUR_GOOGLE_OAUTH_CLIENT_ID';
+const VAPID_PUBLIC_KEY = 'REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY'; // worker/README.md 참고, 비워두면 알림 버튼이 자동 숨김
+
+// ============================================================
+// ===== 전역 상태 =====
+// ============================================================
+const state = {
+  idToken: localStorage.getItem('idToken') || '',
+  profile: null, // {email, name, exp}
+  sources: [],
+  selectedSource: localStorage.getItem('selectedSource') || 'common',
+  modePreference: localStorage.getItem('modePreference') || 'adaptive',
+  dueData: null,
+  queue: [],
+  sessionIndex: 0,
+  sessionStats: { correct: 0, wrong: 0 },
+  latestStats: null,
+};
+
+const $ = (id) => document.getElementById(id);
+
+// ============================================================
+// ===== 유틸 =====
+// ============================================================
+function decodeJwt(token) {
+  try {
+    const payload = token.split('.')[1];
+    const json = decodeURIComponent(
+      atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+        .split('')
+        .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch (e) {
+    return {};
+  }
+}
+
+function tokenIsValid() {
+  if (!state.idToken) return false;
+  const payload = decodeJwt(state.idToken);
+  if (!payload.exp) return false;
+  return payload.exp * 1000 > Date.now() + 30000; // 30초 여유
+}
+
+function normalizeAnswer(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[.,!?'"“”‘’`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function levenshtein(a, b) {
+  const dp = [];
+  for (let i = 0; i <= a.length; i++) dp.push([i]);
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function isCloseEnough(input, target) {
+  const a = normalizeAnswer(input);
+  const b = normalizeAnswer(target);
+  if (!a) return false;
+  if (a === b) return true;
+  const maxLen = Math.max(a.length, b.length);
+  const dist = levenshtein(a, b);
+  const tolerance = maxLen >= 8 ? 2 : maxLen >= 4 ? 1 : 0;
+  return dist <= tolerance;
+}
+
+function tokenize(sentence) {
+  return String(sentence).trim().split(/\s+/).filter(Boolean);
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function findClozeSpan(word) {
+  const idx = word.example.toLowerCase().indexOf(word.english.toLowerCase());
+  if (idx === -1) return null;
+  return {
+    before: word.example.slice(0, idx),
+    match: word.example.slice(idx, idx + word.english.length),
+    after: word.example.slice(idx + word.english.length),
+  };
+}
+
+// ============================================================
+// ===== API 헬퍼 =====
+// ============================================================
+async function apiGet(action, params) {
+  params = params || {};
+  if (!tokenIsValid()) {
+    showLogin('로그인이 만료됐어요. 다시 로그인해주세요.');
+    throw new Error('token expired');
+  }
+  const url = new URL(API_BASE);
+  url.searchParams.set('action', action);
+  url.searchParams.set('idToken', state.idToken);
+  Object.keys(params).forEach((k) => url.searchParams.set(k, params[k]));
+
+  const res = await fetch(url.toString());
+  const data = await res.json();
+  if (data.error) {
+    if (data.error === 'unauthorized' || data.error === 'banned') {
+      showLogin(data.error === 'banned' ? '이용이 제한된 계정이에요.' : '로그인이 필요해요.');
+    }
+    throw new Error(data.error);
+  }
+  return data;
+}
+
+// ============================================================
+// ===== 로그인 =====
+// ============================================================
+function handleCredentialResponse(response) {
+  state.idToken = response.credential;
+  localStorage.setItem('idToken', state.idToken);
+  state.profile = decodeJwt(state.idToken);
+  boot();
+}
+
+function showLogin(errorText) {
+  state.idToken = '';
+  localStorage.removeItem('idToken');
+  $('main-app').classList.add('hidden');
+  $('login-screen').classList.remove('hidden');
+  $('login-error').textContent = errorText || '';
+  initGoogleSignIn();
+}
+
+function initGoogleSignIn() {
+  if (!window.google || !google.accounts || !google.accounts.id) {
+    setTimeout(initGoogleSignIn, 300);
+    return;
+  }
+  if (GOOGLE_CLIENT_ID.startsWith('REPLACE_')) {
+    $('login-error').textContent = 'index.html 상단의 GOOGLE_CLIENT_ID를 설정해주세요.';
+    return;
+  }
+  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredentialResponse });
+  $('google-signin-btn').innerHTML = '';
+  google.accounts.id.renderButton($('google-signin-btn'), { theme: 'filled_white', size: 'large', shape: 'pill', text: 'signin_with' });
+}
+
+function logout() {
+  state.idToken = '';
+  localStorage.removeItem('idToken');
+  if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+  showLogin('');
+}
+
+// ============================================================
+// ===== 부팅 / 홈 데이터 로드 =====
+// ============================================================
+async function boot() {
+  if (!tokenIsValid()) {
+    showLogin('');
+    return;
+  }
+  state.profile = decodeJwt(state.idToken);
+  $('login-screen').classList.add('hidden');
+  $('main-app').classList.remove('hidden');
+  $('header-title-text').textContent = state.profile.name ? state.profile.name + '님' : '영어표현 복습';
+
+  try {
+    await loadSources();
+    await loadDueReviews();
+  } catch (e) {
+    console.error(e);
+  }
+  refreshPushButtonState();
+}
+
+async function loadSources() {
+  const data = await apiGet('sources');
+  state.sources = data.sources || [];
+  const sel = $('source-select');
+  sel.innerHTML = '';
+  state.sources.forEach((s) => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.label;
+    sel.appendChild(opt);
+  });
+  if (state.sources.some((s) => s.id === state.selectedSource)) {
+    sel.value = state.selectedSource;
+  } else if (state.sources[0]) {
+    state.selectedSource = state.sources[0].id;
+  }
+}
+
+async function loadDueReviews() {
+  const data = await apiGet('dueReviews', { source: state.selectedSource });
+  state.dueData = data;
+  state.latestStats = data.stats;
+  $('stat-due').textContent = data.dueCount;
+  $('stat-streak').textContent = (data.stats && data.stats.streak) || 0;
+  $('stat-global').textContent = data.globalStudied || 0;
+  $('start-review-btn').disabled = data.dueCount === 0;
+  $('start-review-btn').textContent = data.dueCount === 0 ? '오늘 복습 완료! 🎉' : `복습 시작하기 (${data.dueCount}개)`;
+}
+
+// ============================================================
+// ===== 적응형 모드 선택 =====
+// ============================================================
+const MODE_TIERS = {
+  recognition: ['mcKrToEn', 'mcEnToKr'],
+  cued: ['definition2en', 'exampleCloze'],
+  free: ['kr2en', 'exampleScramble'],
+  maintenance: ['kr2en', 'exampleScramble', 'definition2en'],
+};
+const ALL_MODES = ['kr2en', 'definition2en', 'exampleCloze', 'exampleScramble', 'mcKrToEn', 'mcEnToKr'];
+
+function tierForBox(box) {
+  if (box === undefined || box === null || box === '') return null;
+  const b = Number(box);
+  if (b <= 1) return 'recognition';
+  if (b <= 3) return 'cued';
+  if (b <= 5) return 'free';
+  return 'maintenance';
+}
+
+function modeApplicable(mode, word, poolSize) {
+  switch (mode) {
+    case 'definition2en':
+      return !!word.definition;
+    case 'exampleCloze':
+      return !!word.example && findClozeSpan(word) !== null;
+    case 'exampleScramble':
+      return !!word.example && tokenize(word.example).length >= 3;
+    case 'mcKrToEn':
+    case 'mcEnToKr':
+      return poolSize >= 3;
+    case 'kr2en':
+      return true;
+    default:
+      return true;
+  }
+}
+
+function pickMode(word, poolSize) {
+  const tier = state.modePreference === 'random' ? null : tierForBox(word.box);
+  const pool = tier ? MODE_TIERS[tier] : ALL_MODES;
+  const candidates = pool.filter((m) => modeApplicable(m, word, poolSize));
+  if (candidates.length > 0) return candidates[Math.floor(Math.random() * candidates.length)];
+  if (modeApplicable('kr2en', word, poolSize)) return 'kr2en';
+  return 'flashcard';
+}
+
+// ============================================================
+// ===== 퀴즈 세션 흐름 =====
+// ============================================================
+function startReview() {
+  if (!state.dueData || state.dueData.dueCount === 0) return;
+  state.queue = shuffle(state.dueData.due);
+  state.sessionIndex = 0;
+  state.sessionStats = { correct: 0, wrong: 0 };
+  $('home-view').classList.add('hidden');
+  $('summary-view').classList.add('hidden');
+  $('quiz-view').classList.remove('hidden');
+  renderCurrentQuestion();
+}
+
+function renderCurrentQuestion() {
+  const total = state.queue.length;
+  const idx = state.sessionIndex;
+  $('progress-fill').style.width = Math.round((idx / total) * 100) + '%';
+
+  if (idx >= total) {
+    finishSession();
+    return;
+  }
+
+  const word = state.queue[idx];
+  const pool = state.queue.filter((w) => w.key !== word.key);
+  const mode = pickMode(word, pool.length);
+  renderQuizCard(word, mode, pool);
+}
+
+function gradeAnswer(word, isCorrect) {
+  apiGet('submitReview', { key: word.key, correct: String(isCorrect) })
+    .then((res) => {
+      state.latestStats = res.stats;
+    })
+    .catch((e) => console.error(e));
+
+  if (isCorrect) state.sessionStats.correct++;
+  else state.sessionStats.wrong++;
+}
+
+function goToNextQuestion() {
+  state.sessionIndex++;
+  renderCurrentQuestion();
+}
+
+function finishSession() {
+  $('quiz-view').classList.add('hidden');
+  $('summary-view').classList.remove('hidden');
+  const { correct, wrong } = state.sessionStats;
+  const total = correct + wrong;
+  const ratio = total > 0 ? correct / total : 1;
+
+  $('summary-emoji').textContent = ratio === 1 ? '🎉' : ratio >= 0.7 ? '👍' : '💪';
+  $('summary-title').textContent = ratio === 1 ? '완벽해요!' : '복습 완료!';
+  $('summary-sub').textContent = `${total}개 중 ${correct}개 정답`;
+  $('summary-correct').textContent = correct;
+  $('summary-wrong').textContent = wrong;
+  $('summary-streak').textContent = (state.latestStats && state.latestStats.streak) || 0;
+
+  checkMilestones();
+  loadDueReviews();
+}
+
+function backToHome() {
+  $('summary-view').classList.add('hidden');
+  $('home-view').classList.remove('hidden');
+}
+
+// ============================================================
+// ===== 퀴즈 카드 렌더러 =====
+// ============================================================
+const MODE_LABELS = {
+  kr2en: '🇰🇷 → 🇺🇸 뜻 보고 영어 맞히기',
+  definition2en: '📖 영영풀이 보고 맞히기',
+  exampleCloze: '✍️ 예문 빈칸 채우기',
+  exampleScramble: '🧩 예문 단어 배열하기',
+  mcKrToEn: '🇰🇷 → 🇺🇸 객관식',
+  mcEnToKr: '🇺🇸 → 🇰🇷 객관식',
+  flashcard: '🗂️ 플래시카드',
+};
+
+function renderQuizCard(word, mode, pool) {
+  const card = $('quiz-card');
+  card.innerHTML = '';
+
+  const badge = document.createElement('div');
+  badge.className = 'quiz-mode-badge';
+  badge.textContent = MODE_LABELS[mode] || mode;
+  card.appendChild(badge);
+
+  const renderers = {
+    kr2en: renderKr2En,
+    definition2en: renderDefinition2En,
+    exampleCloze: renderExampleCloze,
+    exampleScramble: renderExampleScramble,
+    mcKrToEn: renderMcKrToEn,
+    mcEnToKr: renderMcEnToKr,
+    flashcard: renderFlashcard,
+  };
+  (renderers[mode] || renderFlashcard)(card, word, pool);
+}
+
+function buildTypingUI(card, promptHtml, subtext, targetValue, word) {
+  const prompt = document.createElement('div');
+  prompt.className = 'quiz-prompt';
+  prompt.innerHTML = promptHtml;
+  card.appendChild(prompt);
+
+  if (subtext) {
+    const sub = document.createElement('div');
+    sub.className = 'quiz-subtext';
+    sub.textContent = subtext;
+    card.appendChild(sub);
+  }
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'quiz-text-input';
+  input.placeholder = '정답을 입력하세요';
+  input.autocomplete = 'off';
+  input.autocapitalize = 'off';
+  input.spellcheck = false;
+  card.appendChild(input);
+
+  const feedback = document.createElement('div');
+  feedback.className = 'quiz-feedback';
+  card.appendChild(feedback);
+
+  const actions = document.createElement('div');
+  actions.className = 'quiz-actions';
+  const submitBtn = document.createElement('button');
+  submitBtn.className = 'primary-btn';
+  submitBtn.textContent = '확인';
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'primary-btn hidden';
+  nextBtn.textContent = '다음 →';
+  actions.appendChild(submitBtn);
+  actions.appendChild(nextBtn);
+  card.appendChild(actions);
+
+  let answered = false;
+  function submit() {
+    if (answered) return;
+    answered = true;
+    const correct = isCloseEnough(input.value, targetValue);
+    input.classList.add(correct ? 'correct' : 'wrong');
+    input.disabled = true;
+    feedback.className = 'quiz-feedback ' + (correct ? 'correct' : 'wrong');
+    feedback.textContent = correct ? '정답이에요! ✅' : `아쉬워요 ❌ 정답: ${targetValue}`;
+    submitBtn.classList.add('hidden');
+    nextBtn.classList.remove('hidden');
+    gradeAnswer(word, correct);
+  }
+
+  submitBtn.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  nextBtn.addEventListener('click', goToNextQuestion);
+  setTimeout(() => input.focus(), 50);
+}
+
+function renderKr2En(card, word) {
+  buildTypingUI(card, escapeHtml(word.korean), '영어로 답해보세요', word.english, word);
+}
+
+function renderDefinition2En(card, word) {
+  buildTypingUI(card, escapeHtml(word.definition), `힌트: 한글 뜻은 "${escapeHtml(word.korean)}"`, word.english, word);
+}
+
+function renderExampleCloze(card, word) {
+  const span = findClozeSpan(word);
+  const html = `${escapeHtml(span.before)}<span style="color:var(--primary);">_____</span>${escapeHtml(span.after)}`;
+  buildTypingUI(card, html, `힌트: "${escapeHtml(word.korean)}"`, word.english, word);
+}
+
+function renderExampleScramble(card, word) {
+  const original = tokenize(word.example);
+  const shuffled = shuffle(original);
+
+  const prompt = document.createElement('div');
+  prompt.className = 'quiz-prompt';
+  prompt.style.fontSize = '17px';
+  prompt.textContent = word.korean;
+  card.appendChild(prompt);
+
+  const sub = document.createElement('div');
+  sub.className = 'quiz-subtext';
+  sub.textContent = '단어를 순서대로 눌러 예문을 완성하세요';
+  card.appendChild(sub);
+
+  const answerArea = document.createElement('div');
+  answerArea.className = 'scramble-answer';
+  card.appendChild(answerArea);
+
+  const bank = document.createElement('div');
+  bank.className = 'scramble-bank';
+  card.appendChild(bank);
+
+  const feedback = document.createElement('div');
+  feedback.className = 'quiz-feedback';
+  card.appendChild(feedback);
+
+  const actions = document.createElement('div');
+  actions.className = 'quiz-actions';
+  const submitBtn = document.createElement('button');
+  submitBtn.className = 'primary-btn';
+  submitBtn.textContent = '확인';
+  submitBtn.disabled = true;
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'primary-btn hidden';
+  nextBtn.textContent = '다음 →';
+  actions.appendChild(submitBtn);
+  actions.appendChild(nextBtn);
+  card.appendChild(actions);
+
+  const picked = [];
+  let answered = false;
+
+  function renderChips() {
+    answerArea.innerHTML = '';
+    picked.forEach((tokIdx) => {
+      const chip = document.createElement('span');
+      chip.className = 'word-chip picked';
+      chip.textContent = shuffled[tokIdx];
+      if (!answered) {
+        chip.addEventListener('click', () => {
+          const pos = picked.indexOf(tokIdx);
+          if (pos !== -1) picked.splice(pos, 1);
+          renderChips();
+        });
+      }
+      answerArea.appendChild(chip);
+    });
+    bank.innerHTML = '';
+    shuffled.forEach((tok, i) => {
+      if (picked.includes(i)) return;
+      const chip = document.createElement('span');
+      chip.className = 'word-chip';
+      chip.textContent = tok;
+      chip.addEventListener('click', () => {
+        picked.push(i);
+        renderChips();
+      });
+      bank.appendChild(chip);
+    });
+    submitBtn.disabled = picked.length !== shuffled.length;
+  }
+  renderChips();
+
+  function submit() {
+    if (answered) return;
+    answered = true;
+    const answerTokens = picked.map((i) => shuffled[i]);
+    const correct = answerTokens.join(' ') === original.join(' ');
+    feedback.className = 'quiz-feedback ' + (correct ? 'correct' : 'wrong');
+    feedback.textContent = correct ? '정답이에요! ✅' : `아쉬워요 ❌ 정답: ${word.example}`;
+    submitBtn.classList.add('hidden');
+    nextBtn.classList.remove('hidden');
+    renderChips();
+    gradeAnswer(word, correct);
+  }
+  submitBtn.addEventListener('click', submit);
+  nextBtn.addEventListener('click', goToNextQuestion);
+}
+
+function renderMultipleChoice(card, word, pool, questionField, optionField, promptPrefix) {
+  const prompt = document.createElement('div');
+  prompt.className = 'quiz-prompt';
+  prompt.textContent = word[questionField];
+  card.appendChild(prompt);
+
+  if (promptPrefix) {
+    const sub = document.createElement('div');
+    sub.className = 'quiz-subtext';
+    sub.textContent = promptPrefix;
+    card.appendChild(sub);
+  }
+
+  const distractorPool = pool.filter((w) => w[optionField] && w[optionField] !== word[optionField]);
+  const distractors = shuffle(distractorPool).slice(0, 3).map((w) => w[optionField]);
+  const options = shuffle([word[optionField], ...distractors]);
+
+  const optionsWrap = document.createElement('div');
+  optionsWrap.className = 'mc-options';
+  card.appendChild(optionsWrap);
+
+  const feedback = document.createElement('div');
+  feedback.className = 'quiz-feedback';
+  card.appendChild(feedback);
+
+  const actions = document.createElement('div');
+  actions.className = 'quiz-actions';
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'primary-btn hidden';
+  nextBtn.textContent = '다음 →';
+  actions.appendChild(nextBtn);
+  card.appendChild(actions);
+  nextBtn.addEventListener('click', goToNextQuestion);
+
+  let answered = false;
+  options.forEach((opt) => {
+    const btn = document.createElement('button');
+    btn.className = 'mc-option';
+    btn.textContent = opt;
+    btn.addEventListener('click', () => {
+      if (answered) return;
+      answered = true;
+      const correct = opt === word[optionField];
+      Array.from(optionsWrap.children).forEach((b) => {
+        b.disabled = true;
+        if (b.textContent === word[optionField]) b.classList.add('correct');
+        else if (b === btn) b.classList.add('wrong');
+      });
+      feedback.className = 'quiz-feedback ' + (correct ? 'correct' : 'wrong');
+      feedback.textContent = correct ? '정답이에요! ✅' : '아쉬워요 ❌';
+      nextBtn.classList.remove('hidden');
+      gradeAnswer(word, correct);
+    });
+    optionsWrap.appendChild(btn);
+  });
+}
+
+function renderMcKrToEn(card, word, pool) {
+  renderMultipleChoice(card, word, pool, 'korean', 'english', '알맞은 영어 표현을 고르세요');
+}
+function renderMcEnToKr(card, word, pool) {
+  renderMultipleChoice(card, word, pool, 'english', 'korean', '알맞은 한글 뜻을 고르세요');
+}
+
+function renderFlashcard(card, word) {
+  const prompt = document.createElement('div');
+  prompt.className = 'quiz-prompt';
+  prompt.textContent = word.korean;
+  card.appendChild(prompt);
+
+  const reveal = document.createElement('div');
+  reveal.className = 'flashcard-reveal hidden';
+  reveal.innerHTML = `<div class="en">${escapeHtml(word.english)}</div>${word.example ? `<div class="ex">${escapeHtml(word.example)}</div>` : ''}`;
+  card.appendChild(reveal);
+
+  const revealBtn = document.createElement('button');
+  revealBtn.className = 'secondary-btn';
+  revealBtn.textContent = '정답 보기';
+  revealBtn.style.marginBottom = '12px';
+  card.appendChild(revealBtn);
+
+  const gradeArea = document.createElement('div');
+  gradeArea.className = 'self-grade-actions hidden';
+  gradeArea.innerHTML = `<button class="btn-dont-know">몰랐어요 😅</button><button class="btn-know">알고 있었어요 ✅</button>`;
+  card.appendChild(gradeArea);
+
+  revealBtn.addEventListener('click', () => {
+    reveal.classList.remove('hidden');
+    revealBtn.classList.add('hidden');
+    gradeArea.classList.remove('hidden');
+  });
+
+  gradeArea.querySelector('.btn-know').addEventListener('click', () => {
+    gradeAnswer(word, true);
+    goToNextQuestion();
+  });
+  gradeArea.querySelector('.btn-dont-know').addEventListener('click', () => {
+    gradeAnswer(word, false);
+    goToNextQuestion();
+  });
+}
+
+// ============================================================
+// ===== 마일스톤 =====
+// ============================================================
+const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365];
+const GLOBAL_MILESTONES = [10, 50, 100, 200, 500, 1000, 2000];
+const CELEBRATE_MSGS = [
+  '완전 꾸준하다... 이 기세 계속 가보자 🔥',
+  '이 정도면 습관 완성 각인데?',
+  '미쳤다 진짜... 계속 가자',
+  '오늘도 해냄. 인정 🙌',
+];
+
+function checkMilestones() {
+  const streak = (state.latestStats && state.latestStats.streak) || 0;
+  const global = state.dueData ? state.dueData.globalStudied : 0;
+
+  const lastStreak = Number(localStorage.getItem('lastCelebratedStreak') || 0);
+  const lastGlobal = Number(localStorage.getItem('lastCelebratedGlobal') || 0);
+
+  const streakHit = STREAK_MILESTONES.find((m) => streak >= m && lastStreak < m);
+  if (streakHit) {
+    localStorage.setItem('lastCelebratedStreak', String(streakHit));
+    showMilestone('🔥', `${streakHit}일 연속 학습!`, CELEBRATE_MSGS[Math.floor(Math.random() * CELEBRATE_MSGS.length)]);
+    return;
+  }
+  const globalHit = GLOBAL_MILESTONES.find((m) => global >= m && lastGlobal < m);
+  if (globalHit) {
+    localStorage.setItem('lastCelebratedGlobal', String(globalHit));
+    showMilestone('🏆', `표현 ${globalHit}개 정복!`, CELEBRATE_MSGS[Math.floor(Math.random() * CELEBRATE_MSGS.length)]);
+  }
+}
+
+function showMilestone(emoji, title, desc) {
+  $('milestone-emoji').textContent = emoji;
+  $('milestone-title').textContent = title;
+  $('milestone-desc').textContent = desc;
+  $('milestone-overlay').classList.remove('hidden');
+}
+
+// ============================================================
+// ===== 웹푸시 =====
+// ============================================================
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from(Array.from(raw).map((c) => c.charCodeAt(0)));
+}
+
+async function refreshPushButtonState() {
+  const btn = $('push-toggle-btn');
+  if (VAPID_PUBLIC_KEY.startsWith('REPLACE_') || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    btn.classList.add('hidden');
+    return;
+  }
+  btn.classList.remove('hidden');
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    btn.textContent = sub ? '🔔' : '🔕';
+    btn.classList.toggle('active', !!sub);
+  } catch (e) {
+    btn.classList.add('hidden');
+  }
+}
+
+async function togglePush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await apiGet('unsubscribePush', { endpoint: sub.endpoint });
+      await sub.unsubscribe();
+    } else {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        alert('알림 권한이 허용되지 않았어요.');
+        return;
+      }
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+      const json = sub.toJSON();
+      await apiGet('subscribePush', { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
+    }
+  } catch (e) {
+    console.error(e);
+    alert('알림 설정 중 문제가 발생했어요.');
+  }
+  refreshPushButtonState();
+}
+
+// ============================================================
+// ===== 설치(A2HS) =====
+// ============================================================
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  $('install-btn').classList.remove('hidden');
+});
+$('install-btn').addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  $('install-btn').classList.add('hidden');
+});
+if (/iP(hone|ad|od)/.test(navigator.userAgent) && !window.navigator.standalone) {
+  $('ios-install-hint').classList.remove('hidden');
+}
+
+// ============================================================
+// ===== 이벤트 바인딩 =====
+// ============================================================
+$('logout-btn').addEventListener('click', logout);
+$('push-toggle-btn').addEventListener('click', togglePush);
+$('start-review-btn').addEventListener('click', startReview);
+$('back-home-btn').addEventListener('click', backToHome);
+$('milestone-close-btn').addEventListener('click', () => $('milestone-overlay').classList.add('hidden'));
+
+$('source-select').addEventListener('change', (e) => {
+  state.selectedSource = e.target.value;
+  localStorage.setItem('selectedSource', state.selectedSource);
+  loadDueReviews();
+});
+
+$('mode-pref-segmented').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-pref]');
+  if (!btn) return;
+  state.modePreference = btn.dataset.pref;
+  localStorage.setItem('modePreference', state.modePreference);
+  Array.from($('mode-pref-segmented').children).forEach((b) => b.classList.toggle('active', b === btn));
+});
+
+// ============================================================
+// ===== 시작 =====
+// ============================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch((e) => console.error('SW 등록 실패', e));
+  });
+}
+
+if (API_BASE.startsWith('REPLACE_')) {
+  $('login-error').textContent = 'index.html 상단의 API_BASE를 실제 Apps Script 웹 앱 URL로 설정해주세요.';
+}
+
+if (tokenIsValid()) {
+  boot();
+} else {
+  showLogin('');
+}
+</script>
+</body>
+</html>

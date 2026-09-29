@@ -1,0 +1,18 @@
+{
+  "name": "english-review-push-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Apps Script 백엔드의 pushTargets를 주기적으로 조회해 VAPID 웹푸시를 발송하는 Cloudflare Worker",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

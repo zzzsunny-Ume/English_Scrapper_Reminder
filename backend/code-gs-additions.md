@@ -1,0 +1,236 @@
+# Code.gs 추가 패치 (기존 코드는 그대로, 추가/최소 수정만)
+
+이 문서는 기존에 운영 중인 `Code.gs`를 다시 쓰지 않고, PWA의 새 기능(적응형 복습
+난이도, 웹푸시 알림)을 위해 **추가하거나 아주 조금만 고치면 되는 부분**만 정리한
+것입니다. 기존 텔레그램 폴링/등록/삭제 로직은 전혀 건드리지 않습니다.
+
+적용 순서:
+
+1. [필수] STEP 1 — 웹푸시 구독 저장 기능 추가
+2. [필수] STEP 2 — 발송 서버(Cloudflare Worker)가 호출할 `pushTargets` 엔드포인트 추가
+3. [권장, 선택] STEP 3 — `dueReviews` 응답에 박스 단계(`box`)를 포함 (적응형 난이도 조절용)
+4. [필수] STEP 4 — 스크립트 속성 추가
+5. [필수] STEP 5 — 재배포
+
+패치를 전혀 하지 않아도 PWA는 정상 동작합니다. 다만:
+- STEP 1~2를 건너뛰면 알림 켜기 버튼이 있어도 실제 알림은 발송되지 않습니다 (PWA는
+  구독 자체는 브라우저에 만들지만 서버에 저장할 곳이 없어서 결국 실패함).
+- STEP 3을 건너뛰면 복습 모드가 "적응형"이 아니라 완전 랜덤으로만 동작합니다
+  (동작은 하지만, 망각곡선 진행 단계에 맞춘 난이도 조절은 안 됨).
+
+---
+
+## STEP 1. 웹푸시 구독 저장 (파일 맨 아래에 통째로 추가)
+
+기존 함수를 하나도 바꾸지 않고, 파일 맨 아래에 아래 블록을 그대로 붙여넣으세요.
+
+```js
+// ===================================================================
+// ===== 웹푸시 구독 저장/조회 (PWA 알림 기능용 - 신규 추가분) =====
+// ===================================================================
+
+const PUSH_SUB_SHEET_NAME = '푸시구독'; // 개인복습 스프레드시트 안에 자동 생성되는 탭
+
+function getPushSubSheet() {
+  const reviewSs = getReviewSpreadsheet();
+  let sheet = reviewSs.getSheetByName(PUSH_SUB_SHEET_NAME);
+  if (!sheet) {
+    sheet = reviewSs.insertSheet(PUSH_SUB_SHEET_NAME);
+    sheet.appendRow(['user_id', 'endpoint', 'p256dh', 'auth', '등록일']);
+  }
+  return sheet;
+}
+
+// 같은 사용자+같은 기기(endpoint)가 이미 구독 중이면 중복 추가하지 않음
+function savePushSubscription(sender, endpoint, p256dh, authKey) {
+  const sheet = getPushSubSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    for (let i = 0; i < values.length; i++) {
+      if (values[i][0] === sender && values[i][1] === endpoint) {
+        return { ok: true, alreadyExists: true };
+      }
+    }
+  }
+  sheet.appendRow([sender, endpoint, p256dh, authKey, new Date()]);
+  return { ok: true };
+}
+
+// endpoint를 안 주면 그 사용자의 모든 기기 구독을 해제
+function deletePushSubscription(sender, endpoint) {
+  const sheet = getPushSubSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { ok: true };
+  const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (values[i][0] === sender && (!endpoint || values[i][1] === endpoint)) {
+      sheet.deleteRow(i + 2);
+    }
+  }
+  return { ok: true };
+}
+```
+
+## STEP 2. `pushTargets` 발송 대상 조회 (파일 맨 아래, STEP 1 아래에 이어서 추가)
+
+Cloudflare Worker가 하루에 한 번(또는 정한 주기로) 이 액션을 호출해서 "오늘 알림을
+보내야 할 사용자+기기+복습할 개수" 목록을 받아갑니다. 로그인 세션이 아니라 서버 대
+서버 호출이라, 구글 idToken 대신 **비밀 문자열(secret)**로 인증합니다.
+
+```js
+// Cloudflare Worker(발송 서버)가 매일 정해진 시각에 호출.
+// idToken 대신 스크립트 속성의 PUSH_RELAY_SECRET과 대조해서 인증한다.
+function getPushTargets(secret) {
+  const expected = PropertiesService.getScriptProperties().getProperty('PUSH_RELAY_SECRET');
+  if (!expected || secret !== expected) {
+    return { error: 'unauthorized' };
+  }
+
+  const subSheet = getPushSubSheet();
+  const lastRow = subSheet.getLastRow();
+  if (lastRow < 2) return { targets: [] };
+
+  const subs = subSheet.getRange(2, 1, lastRow - 1, 4).getValues();
+  const allWords = getWordListFromReviewSheet('common'); // 공동 시트 기준으로 due 개수 계산
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dueCountCache = {}; // 같은 사용자가 기기 여러 대로 구독 중일 수 있어서 캐시
+
+  const targets = subs
+    .map(row => {
+      const sender = row[0];
+      if (dueCountCache[sender] === undefined) {
+        const reviewMap = getReviewMapForUser(sender);
+        let due = 0;
+        allWords.forEach(word => {
+          const rec = reviewMap[word.key];
+          if (!rec) { due++; return; }
+          const nextDue = new Date(rec.nextDue);
+          nextDue.setHours(0, 0, 0, 0);
+          if (nextDue <= today) due++;
+        });
+        dueCountCache[sender] = due;
+      }
+      return { endpoint: row[1], p256dh: row[2], auth: row[3], dueCount: dueCountCache[sender] };
+    })
+    .filter(t => t.dueCount > 0); // 오늘 복습할 게 없는 사람에게는 알림 안 보냄
+
+  return { targets: targets };
+}
+```
+
+### `doGet` 함수 수정 (이 부분만 기존 함수를 고쳐야 함)
+
+`pushTargets`는 로그인 사용자가 아니라 발송 서버가 부르는 것이라, 기존처럼
+`idToken`을 검증하기 **전에** 먼저 처리해야 합니다. 또 `subscribePush` /
+`unsubscribePush`는 로그인 사용자가 부르는 일반 액션이라 기존 액션들 옆에
+추가합니다.
+
+**기존 코드:**
+```js
+function doGet(e) {
+  try {
+    const action = e.parameter.action;
+    const idToken = e.parameter.idToken || '';
+
+    const auth = verifyGoogleToken(idToken);
+```
+
+**아래처럼 바꾸기 (idToken 검증 위에 pushTargets 분기만 추가):**
+```js
+function doGet(e) {
+  try {
+    const action = e.parameter.action;
+
+    // 발송 서버(Cloudflare Worker) 전용 - 로그인 세션이 아니므로 idToken 검증 이전에 처리
+    if (action === 'pushTargets') {
+      return jsonResponse(getPushTargets(e.parameter.secret || ''));
+    }
+
+    const idToken = e.parameter.idToken || '';
+
+    const auth = verifyGoogleToken(idToken);
+```
+
+**기존 `submitReview` 분기 바로 아래에 이 두 블록 추가:**
+```js
+    if (action === 'submitReview') {
+      const key = e.parameter.key || '';
+      const correct = e.parameter.correct === 'true';
+      return jsonResponse(submitReview(sender, key, correct));
+    }
+
+    // ↓↓↓ 여기부터 신규 추가 ↓↓↓
+    if (action === 'subscribePush') {
+      const endpoint = e.parameter.endpoint || '';
+      const p256dh = e.parameter.p256dh || '';
+      const authKey = e.parameter.auth || '';
+      if (!endpoint || !p256dh || !authKey) return jsonResponse({ error: 'missing params' });
+      return jsonResponse(savePushSubscription(sender, endpoint, p256dh, authKey));
+    }
+    if (action === 'unsubscribePush') {
+      return jsonResponse(deletePushSubscription(sender, e.parameter.endpoint || ''));
+    }
+    // ↑↑↑ 여기까지 신규 추가 ↑↑↑
+
+    return jsonResponse({ error: 'unknown action', action: action });
+```
+
+---
+
+## STEP 3 (선택, 권장). `getDueReviews`에 박스 단계 포함시키기
+
+이 패치를 하면 PWA가 "이 단어가 지금 몇 번째 복습 단계인지"를 알 수 있어서,
+갓 등록된/방금 틀린 단어는 쉬운 객관식으로, 여러 번 맞혀서 박스가 높아진 단어는
+빈칸 채우기·문장 재배열 같은 어려운(하지만 장기기억에 훨씬 효과적인) 방식으로
+자동 전환합니다. 건너뛰어도 앱은 정상 동작하고, 대신 복습 모드가 완전 랜덤으로만
+섞입니다.
+
+**기존 코드 (`getDueReviews` 함수 안, 맨 마지막 return 부분):**
+```js
+  return {
+    total: all.length,
+    studied: studiedInSource,
+    globalStudied: globalStudied,
+    dueCount: due.length,
+    due: due.map(w => ({ korean: w.korean, english: w.english, definition: w.definition, example: w.example, key: w.key })),
+    stats: getUserStats(sender)
+  };
+```
+
+**이렇게 교체:**
+```js
+  return {
+    total: all.length,
+    studied: studiedInSource,
+    globalStudied: globalStudied,
+    dueCount: due.length,
+    due: due.map(w => {
+      const rec = reviewMap[w.key];
+      return { korean: w.korean, english: w.english, definition: w.definition, example: w.example, key: w.key, box: rec ? rec.box : 0 };
+    }),
+    stats: getUserStats(sender)
+  };
+```
+
+(`reviewMap`은 이 함수 위쪽에서 이미 `const reviewMap = getReviewMapForUser(sender);`로
+선언되어 있으므로 그대로 재사용하면 됩니다.)
+
+---
+
+## STEP 4. 스크립트 속성 추가
+
+프로젝트 설정 > 스크립트 속성에 아래 키를 추가하세요 (기존 `TELEGRAM_TOKEN`,
+`ANTHROPIC_API_KEY`, `REVIEW_SPREADSHEET_ID`, `GOOGLE_CLIENT_ID` 옆에 같이):
+
+| 키 | 값 |
+|---|---|
+| `PUSH_RELAY_SECRET` | 아무 긴 랜덤 문자열 (예: `openssl rand -hex 32`로 생성). Cloudflare Worker의 `APPS_SCRIPT_SECRET` 환경변수에도 **동일한 값**을 넣어야 함 |
+
+## STEP 5. 재배포
+
+Apps Script는 코드를 저장하는 것만으로는 이미 배포된 웹 앱 URL에 반영되지 않습니다.
+[배포 > 배포 관리 > 기존 배포 연필 아이콘 > 버전: 새 버전 > 배포]로 다시 배포해야
+변경사항이 실제 API에 반영됩니다. (URL은 그대로 유지됨)
