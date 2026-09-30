@@ -1424,8 +1424,22 @@ function isBannedEmail(email) {
  * 구글의 tokeninfo 엔드포인트를 이용 (Apps Script에 JWT 암호검증 라이브러리가
  * 따로 없어서, 구글이 대신 검증해주는 이 방식이 제일 간단하고 안전함).
  */
+// 같은 idToken으로 복습 세션 중 submitReview가 문제마다(수십 번) 호출되는데,
+// 매번 구글 tokeninfo 엔드포인트까지 네트워크 왕복을 하면 그게 체감 속도 저하의
+// 큰 원인이 된다. 토큰 자체가 어차피 시간 지나면 만료되므로, 검증 결과를 5분만
+// 짧게 캐시해두고 재사용한다 (토큰의 실제 만료 시간인 1시간보다 훨씬 짧게 잡아서
+// 안전하게 유지 - 캐시가 만료돼도 다음 호출에서 다시 검증하면 그만).
 function verifyGoogleToken(idToken) {
   if (!idToken) return null;
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'gtok_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, idToken)
+  );
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return JSON.parse(cached);
+  }
 
   const clientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID');
   if (!clientId) {
@@ -1442,7 +1456,9 @@ function verifyGoogleToken(idToken) {
     if (data.aud !== clientId) return null; // 우리 앱이 발급한 토큰이 아니면 거부
     if (data.email_verified !== 'true' && data.email_verified !== true) return null;
 
-    return { email: data.email, name: data.name || data.email };
+    const result = { email: data.email, name: data.name || data.email };
+    cache.put(cacheKey, JSON.stringify(result), 300); // 5분
+    return result;
   } catch (err) {
     debugLog('구글 토큰 검증 에러: ' + err);
     return null;
@@ -1498,12 +1514,19 @@ function listPersonalSheets() {
 }
 
 // 개인복습 스프레드시트(표현목록과 완전히 다른 파일)를 엶
+// dueReviews 한 번 처리하는 동안에도 단어목록 읽기/복습기록 읽기/통계 읽기가
+// 각자 이 함수를 불러서, 패치 전에는 같은 스프레드시트를 한 요청 안에서 3번씩
+// 다시 열고 있었다 (SpreadsheetApp.openById 자체가 꽤 무거운 호출). 요청 하나
+// 처리하는 동안(= 이 스크립트가 살아있는 동안)에는 한 번만 열고 재사용한다.
+let _reviewSsCache = null;
 function getReviewSpreadsheet() {
+  if (_reviewSsCache) return _reviewSsCache;
   const id = PropertiesService.getScriptProperties().getProperty('REVIEW_SPREADSHEET_ID');
   if (!id) {
     throw new Error('REVIEW_SPREADSHEET_ID가 스크립트 속성에 설정되지 않았습니다.');
   }
-  return SpreadsheetApp.openById(id);
+  _reviewSsCache = SpreadsheetApp.openById(id);
+  return _reviewSsCache;
 }
 
 // 표현 목록 하나를 개인복습 스프레드시트의 특정 탭에 통째로 덮어씀 (공용 헬퍼)

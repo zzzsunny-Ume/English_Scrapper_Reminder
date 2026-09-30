@@ -538,8 +538,8 @@ async function boot() {
   $('hero-greeting').textContent = firstName ? `안녕하세요, ${firstName}님 👋` : '안녕하세요 👋';
 
   try {
-    await loadSources();
-    await loadDueReviews();
+    // 소스 목록과 복습 데이터는 서로 의존하지 않으니 동시에 요청 -> 순차 호출 대비 체감 로딩이 절반 가까이 줄어듦
+    await Promise.all([loadSources(), loadDueReviews()]);
   } catch (e) {
     console.error(e);
   }

@@ -9,8 +9,9 @@
 1. [필수] STEP 1 — 웹푸시 구독 저장 기능 추가
 2. [필수] STEP 2 — 발송 서버(Cloudflare Worker)가 호출할 `pushTargets` 엔드포인트 추가
 3. [권장, 선택] STEP 3 — `dueReviews` 응답에 박스 단계(`box`)를 포함 (적응형 난이도 조절용)
-4. [필수] STEP 4 — 스크립트 속성 추가
-5. [필수] STEP 5 — 재배포
+4. [권장] STEP 3.5 — 응답 속도 최적화 (스프레드시트 중복 오픈 제거, 토큰 검증 캐싱)
+5. [필수] STEP 4 — 스크립트 속성 추가
+6. [필수] STEP 5 — 재배포
 
 패치를 전혀 하지 않아도 PWA는 정상 동작합니다. 다만:
 - STEP 1~2를 건너뛰면 알림 켜기 버튼이 있어도 실제 알림은 발송되지 않습니다 (PWA는
@@ -234,6 +235,72 @@ function doGet(e) {
 선언되어 있으므로 그대로 재사용하면 됩니다. `boxSummary`는 홈 화면의 "복습 현황"
 그래프에 쓰이는 값으로, 소스 안의 단어를 미학습/단기기억(박스 1~3)/장기기억(박스
 4~6) 세 구간으로 나눠 센 개수입니다.)
+
+---
+
+## STEP 3.5 (권장). 응답 속도 최적화
+
+API 호출(특히 복습 세션 중 문제마다 불리는 `submitReview`)이 느리게 느껴진다면
+아래 두 함수를 고치세요. 둘 다 동작은 그대로고, 같은 일을 반복하지 않게만 바꾸는
+겁니다.
+
+**`getReviewSpreadsheet` 함수를 이렇게 교체** (요청 한 번 처리하는 동안 스프레드시트를
+여러 번 다시 여는 걸 막음 — `dueReviews` 하나가 단어목록/복습기록/통계를 각각
+읽으면서 패치 전에는 같은 시트를 3번씩 열고 있었음):
+```js
+let _reviewSsCache = null;
+function getReviewSpreadsheet() {
+  if (_reviewSsCache) return _reviewSsCache;
+  const id = PropertiesService.getScriptProperties().getProperty('REVIEW_SPREADSHEET_ID');
+  if (!id) {
+    throw new Error('REVIEW_SPREADSHEET_ID가 스크립트 속성에 설정되지 않았습니다.');
+  }
+  _reviewSsCache = SpreadsheetApp.openById(id);
+  return _reviewSsCache;
+}
+```
+
+**`verifyGoogleToken` 함수를 이렇게 교체** (구글 idToken 검증을 매 요청마다 구글
+서버에 물어보는 대신, 5분간 캐시해서 재사용 — 복습 세션 중 문제 하나 풀 때마다
+`submitReview`가 불리는데, 그때마다 외부 네트워크 왕복이 있었던 게 체감 속도
+저하의 가장 큰 원인이었음):
+```js
+function verifyGoogleToken(idToken) {
+  if (!idToken) return null;
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'gtok_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, idToken)
+  );
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
+  const clientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID');
+  if (!clientId) {
+    debugLog('GOOGLE_CLIENT_ID가 스크립트 속성에 설정되지 않음');
+    return null;
+  }
+
+  try {
+    const url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken);
+    const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    const data = JSON.parse(res.getContentText());
+
+    if (data.error || !data.email) return null;
+    if (data.aud !== clientId) return null;
+    if (data.email_verified !== 'true' && data.email_verified !== true) return null;
+
+    const result = { email: data.email, name: data.name || data.email };
+    cache.put(cacheKey, JSON.stringify(result), 300);
+    return result;
+  } catch (err) {
+    debugLog('구글 토큰 검증 에러: ' + err);
+    return null;
+  }
+}
+```
 
 ---
 
