@@ -1,23 +1,29 @@
 # Code.gs 추가 패치 (기존 코드는 그대로, 추가/최소 수정만)
 
-이 문서는 기존에 운영 중인 `Code.gs`를 다시 쓰지 않고, PWA의 새 기능(적응형 복습
-난이도, 웹푸시 알림)을 위해 **추가하거나 아주 조금만 고치면 되는 부분**만 정리한
-것입니다. 기존 텔레그램 폴링/등록/삭제 로직은 전혀 건드리지 않습니다.
+> **⚠️ 안내:** PWA 아키텍처가 바뀌어서, 이제 PWA는 Apps Script의 `doGet` API를
+> 전혀 호출하지 않고 Cloudflare Worker(`worker-api/`) + KV만 봅니다. 그래서
+> 아래 STEP 1~3.5(웹푸시 구독 저장/`pushTargets`/`box` 필드/응답 속도 최적화)는
+> **더 이상 필요 없습니다** — 만들어도 아무도 안 부르는 죽은 코드가 될 뿐입니다.
+> 실제로 필요한 건 맨 아래 **STEP 6 (Cloudflare KV 동기화)** 하나뿐입니다.
+>
+> 이 문서를 처음부터 하나하나 따라하기보다는, **`backend/Code.full.gs`를 열어서
+> 전체를 그대로 복사해 기존 Code.gs에 덮어쓰는 걸 권장합니다** (STEP 6까지 이미
+> 다 반영되어 있음). 아래 STEP 1~5는 예전 아키텍처(PWA가 Apps Script를 직접
+> 호출하던 방식)를 diff로 적용하고 싶은 경우에만 참고하세요.
+
+이 문서는 기존에 운영 중인 `Code.gs`를 다시 쓰지 않고, PWA의 새 기능을 위해
+**추가하거나 아주 조금만 고치면 되는 부분**만 정리한 것입니다. 기존 텔레그램
+폴링/등록/삭제 로직은 전혀 건드리지 않습니다.
 
 적용 순서:
 
-1. [필수] STEP 1 — 웹푸시 구독 저장 기능 추가
-2. [필수] STEP 2 — 발송 서버(Cloudflare Worker)가 호출할 `pushTargets` 엔드포인트 추가
-3. [권장, 선택] STEP 3 — `dueReviews` 응답에 박스 단계(`box`)를 포함 (적응형 난이도 조절용)
-4. [권장] STEP 3.5 — 응답 속도 최적화 (스프레드시트 중복 오픈 제거, 토큰 검증 캐싱)
-5. [필수] STEP 4 — 스크립트 속성 추가
-6. [필수] STEP 5 — 재배포
-
-패치를 전혀 하지 않아도 PWA는 정상 동작합니다. 다만:
-- STEP 1~2를 건너뛰면 알림 켜기 버튼이 있어도 실제 알림은 발송되지 않습니다 (PWA는
-  구독 자체는 브라우저에 만들지만 서버에 저장할 곳이 없어서 결국 실패함).
-- STEP 3을 건너뛰면 복습 모드가 "적응형"이 아니라 완전 랜덤으로만 동작합니다
-  (동작은 하지만, 망각곡선 진행 단계에 맞춘 난이도 조절은 안 됨).
+1. [레거시] STEP 1 — 웹푸시 구독 저장 기능 추가
+2. [레거시] STEP 2 — 발송 서버가 호출할 `pushTargets` 엔드포인트 추가
+3. [레거시] STEP 3 — `dueReviews` 응답에 박스 단계(`box`)를 포함
+4. [레거시] STEP 3.5 — 응답 속도 최적화 (스프레드시트 중복 오픈 제거, 토큰 검증 캐싱)
+5. [레거시] STEP 4 — 스크립트 속성 추가
+6. [레거시] STEP 5 — 재배포
+7. **[필수, 현재 아키텍처] STEP 6 — Cloudflare KV 동기화**
 
 ---
 
@@ -318,3 +324,104 @@ function verifyGoogleToken(idToken) {
 Apps Script는 코드를 저장하는 것만으로는 이미 배포된 웹 앱 URL에 반영되지 않습니다.
 [배포 > 배포 관리 > 기존 배포 연필 아이콘 > 버전: 새 버전 > 배포]로 다시 배포해야
 변경사항이 실제 API에 반영됩니다. (URL은 그대로 유지됨)
+
+---
+
+## STEP 6 (필수, 현재 아키텍처). Cloudflare KV 동기화
+
+`refreshWordListToReviewSheet` 함수를 아래처럼 바꾸고, 파일 맨 아래에 새 함수
+3개(`toSyncWord`, `getBannedEmailList`, `syncToCloudflare`)를 추가하세요.
+`worker-api/`를 먼저 배포해서 URL을 받아둬야 합니다 (README.md 1단계 참고).
+
+**기존 코드:**
+```js
+function refreshWordListToReviewSheet() {
+  const reviewSs = getReviewSpreadsheet();
+
+  // 1. 공동 시트 미러
+  writeWordListSheet(reviewSs, WORD_LIST_SHEET_NAME, getAllExpressions());
+
+  // 2. 존재하는 개인 시트들을 각각 미러
+  const personalSheets = listPersonalSheets();
+  personalSheets.forEach(p => {
+    writeWordListSheet(reviewSs, p.mirrorName, getExpressionsFromSheet(p.sheetName));
+  });
+
+  // 3. PWA가 드롭다운에 쓸 소스 목록도 최신화
+  writeSourceList(reviewSs, personalSheets);
+}
+```
+
+**이렇게 교체:**
+```js
+function refreshWordListToReviewSheet() {
+  const reviewSs = getReviewSpreadsheet();
+
+  const commonWords = getAllExpressions();
+  writeWordListSheet(reviewSs, WORD_LIST_SHEET_NAME, commonWords);
+
+  const personalSheets = listPersonalSheets();
+  const wordlists = { common: commonWords.map(toSyncWord) };
+  personalSheets.forEach(p => {
+    const words = getExpressionsFromSheet(p.sheetName);
+    writeWordListSheet(reviewSs, p.mirrorName, words);
+    wordlists[p.sourceId] = words.map(toSyncWord);
+  });
+
+  writeSourceList(reviewSs, personalSheets);
+
+  try {
+    syncToCloudflare(wordlists, personalSheets);
+  } catch (err) {
+    debugLog('Cloudflare 동기화 실패: ' + err);
+  }
+}
+```
+
+**파일 맨 아래에 추가:**
+```js
+function toSyncWord(e) {
+  return { korean: e.korean, english: e.english, definition: e.definition, example: e.example, key: buildCompositeKey(e.korean, e.english) };
+}
+
+function getBannedEmailList() {
+  const reviewSs = getReviewSpreadsheet();
+  const sheet = reviewSs.getSheetByName(BANNED_USERS_SHEET_NAME);
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  return values.map(r => String(r[0]).trim()).filter(Boolean);
+}
+
+function syncToCloudflare(wordlists, personalSheets) {
+  const url = PropertiesService.getScriptProperties().getProperty('CLOUDFLARE_API_URL');
+  const secret = PropertiesService.getScriptProperties().getProperty('CLOUDFLARE_SYNC_SECRET');
+  if (!url || !secret) {
+    debugLog('CLOUDFLARE_API_URL 또는 CLOUDFLARE_SYNC_SECRET이 설정되지 않아 Cloudflare 동기화를 건너뜀');
+    return;
+  }
+
+  const sources = [{ id: 'common', label: '🌐 공동 (다같이 모은 표현)' }]
+    .concat(personalSheets.map(p => ({ id: p.sourceId, label: '👤 ' + p.ownerDisplay })));
+
+  const res = UrlFetchApp.fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=sync', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-sync-secret': secret },
+    payload: JSON.stringify({ sources: sources, banned: getBannedEmailList(), wordlists: wordlists }),
+    muteHttpExceptions: true
+  });
+  debugLog('Cloudflare 동기화 응답: ' + res.getResponseCode() + ' ' + res.getContentText());
+}
+```
+
+**스크립트 속성 추가:**
+
+| 키 | 값 |
+|---|---|
+| `CLOUDFLARE_API_URL` | worker-api 배포 주소 |
+| `CLOUDFLARE_SYNC_SECRET` | worker-api의 `SYNC_SECRET`과 동일한 값 |
+
+저장 후 재배포하고, `refreshWordListToReviewSheet`를 한 번 수동 실행하거나
+텔레그램 메시지를 하나 보내 폴링이 돌게 하면 KV에 데이터가 채워집니다.

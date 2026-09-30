@@ -1,8 +1,8 @@
 // Cloudflare Worker: 웹푸시 발송 릴레이.
 //
-// Apps Script(Code.gs)는 VAPID 서명에 필요한 타원곡선 암호화를 지원하지 않기 때문에,
+// VAPID 서명에 필요한 타원곡선 암호화는 Apps Script가 지원하지 않기 때문에,
 // "오늘 복습할 표현이 있는 사용자에게 실제로 푸시를 쏘는" 역할만 이 Worker가 맡는다.
-// 데이터(누가 뭘 구독했는지, 오늘 몇 개나 밀렸는지)는 전부 Apps Script의
+// 데이터(누가 뭘 구독했는지, 오늘 몇 개나 밀렸는지)는 worker-api(../../worker-api)의
 // `pushTargets` 액션에서 가져오고, 이 Worker는 상태를 갖지 않는다(stateless relay).
 //
 // 매일 cron 트리거(wrangler.toml)로 자동 실행되며, /trigger 경로로 수동 테스트도 가능.
@@ -27,13 +27,13 @@ export default {
 };
 
 async function sendDueReviewPushes(env) {
-  requireEnv(env, ['VAPID_SUBJECT', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'APPS_SCRIPT_URL', 'APPS_SCRIPT_SECRET']);
+  requireEnv(env, ['VAPID_SUBJECT', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'REVIEW_API_URL', 'PUSH_RELAY_SECRET']);
 
   webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
 
-  const apiUrl = new URL(env.APPS_SCRIPT_URL);
+  const apiUrl = new URL(env.REVIEW_API_URL);
   apiUrl.searchParams.set('action', 'pushTargets');
-  apiUrl.searchParams.set('secret', env.APPS_SCRIPT_SECRET);
+  apiUrl.searchParams.set('secret', env.PUSH_RELAY_SECRET);
 
   const res = await fetch(apiUrl.toString());
   const data = await res.json();

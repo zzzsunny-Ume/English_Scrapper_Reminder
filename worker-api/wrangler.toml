@@ -1,0 +1,15 @@
+name = "english-review-api"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# KV 네임스페이스: 배포 전에 아래 명령으로 만들고, 나온 id를 여기 넣으세요.
+#   npx wrangler kv namespace create KV
+# (출력에 나오는 id를 복사해서 아래 id = "..." 자리에 붙여넣기)
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# 아래 값들은 여기 파일에 직접 쓰지 말고 반드시 시크릿으로 등록하세요:
+#   wrangler secret put GOOGLE_CLIENT_ID     (PWA index.html과 동일한 OAuth 클라이언트 ID)
+#   wrangler secret put SYNC_SECRET          (Apps Script가 sync 호출할 때 쓰는 비밀값, 임의로 정하기)
+#   wrangler secret put PUSH_RELAY_SECRET    (웹푸시 발송 Worker가 pushTargets 부를 때 쓰는 비밀값)

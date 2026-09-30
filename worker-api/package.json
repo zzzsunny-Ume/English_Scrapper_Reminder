@@ -1,0 +1,15 @@
+{
+  "name": "english-review-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PWA 백엔드 - Cloudflare KV만 읽고 써서 즉시 응답 (Apps Script/Sheets API 직접 호출 없음)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

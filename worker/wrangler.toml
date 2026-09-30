@@ -12,6 +12,6 @@ crons = ["0 22 * * *"]
 #   wrangler secret put VAPID_SUBJECT
 #   wrangler secret put VAPID_PUBLIC_KEY
 #   wrangler secret put VAPID_PRIVATE_KEY
-#   wrangler secret put APPS_SCRIPT_URL
-#   wrangler secret put APPS_SCRIPT_SECRET
-# 자세한 값/발급 방법은 worker/README.md 참고
+#   wrangler secret put REVIEW_API_URL      (worker-api 배포 주소, 예: https://english-review-api.<계정>.workers.dev)
+#   wrangler secret put PUSH_RELAY_SECRET   (worker-api의 PUSH_RELAY_SECRET과 동일한 값)
+# 자세한 값/발급 방법은 README.md 참고

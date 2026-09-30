@@ -1569,16 +1569,69 @@ function refreshWordListToReviewSheet() {
   const reviewSs = getReviewSpreadsheet();
 
   // 1. 공동 시트 미러
-  writeWordListSheet(reviewSs, WORD_LIST_SHEET_NAME, getAllExpressions());
+  const commonWords = getAllExpressions();
+  writeWordListSheet(reviewSs, WORD_LIST_SHEET_NAME, commonWords);
 
   // 2. 존재하는 개인 시트들을 각각 미러
   const personalSheets = listPersonalSheets();
+  const wordlists = { common: commonWords.map(toSyncWord) };
   personalSheets.forEach(p => {
-    writeWordListSheet(reviewSs, p.mirrorName, getExpressionsFromSheet(p.sheetName));
+    const words = getExpressionsFromSheet(p.sheetName);
+    writeWordListSheet(reviewSs, p.mirrorName, words);
+    wordlists[p.sourceId] = words.map(toSyncWord);
   });
 
   // 3. PWA가 드롭다운에 쓸 소스 목록도 최신화
   writeSourceList(reviewSs, personalSheets);
+
+  // 4. PWA는 이제 이 시트를 직접 안 읽고 Cloudflare KV만 본다 (훨씬 빠르게 응답하기 위함).
+  //    시트 미러링은 그대로 유지(백업/육안 확인용)하고, 추가로 최신 데이터를 KV에도 밀어넣는다.
+  try {
+    syncToCloudflare(wordlists, personalSheets);
+  } catch (err) {
+    debugLog('Cloudflare 동기화 실패: ' + err);
+  }
+}
+
+// writeWordListSheet가 쓰는 것과 동일한 key(한글+영어 조합)를 사용해 PWA가 기대하는 형태로 변환
+function toSyncWord(e) {
+  return { korean: e.korean, english: e.english, definition: e.definition, example: e.example, key: buildCompositeKey(e.korean, e.english) };
+}
+
+// 개인복습 스프레드시트의 "차단된사용자" 탭에서 이메일 목록만 뽑아옴 (KV 동기화용)
+function getBannedEmailList() {
+  const reviewSs = getReviewSpreadsheet();
+  const sheet = reviewSs.getSheetByName(BANNED_USERS_SHEET_NAME);
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  return values.map(r => String(r[0]).trim()).filter(Boolean);
+}
+
+// Cloudflare Worker(worker-api)의 KV로 최신 표현 목록/소스 목록/차단 목록을 밀어넣는다.
+// 스크립트 속성에 CLOUDFLARE_API_URL(worker-api 배포 주소)과 CLOUDFLARE_SYNC_SECRET(worker-api의
+// SYNC_SECRET과 동일한 값)이 설정되어 있어야 동작한다. 둘 중 하나라도 없으면 조용히 건너뛴다
+// (아직 worker-api를 안 만들었어도 텔레그램 봇/시트 미러링에는 영향 없음).
+function syncToCloudflare(wordlists, personalSheets) {
+  const url = PropertiesService.getScriptProperties().getProperty('CLOUDFLARE_API_URL');
+  const secret = PropertiesService.getScriptProperties().getProperty('CLOUDFLARE_SYNC_SECRET');
+  if (!url || !secret) {
+    debugLog('CLOUDFLARE_API_URL 또는 CLOUDFLARE_SYNC_SECRET이 설정되지 않아 Cloudflare 동기화를 건너뜀');
+    return;
+  }
+
+  const sources = [{ id: 'common', label: '🌐 공동 (다같이 모은 표현)' }]
+    .concat(personalSheets.map(p => ({ id: p.sourceId, label: '👤 ' + p.ownerDisplay })));
+
+  const res = UrlFetchApp.fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=sync', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-sync-secret': secret },
+    payload: JSON.stringify({ sources: sources, banned: getBannedEmailList(), wordlists: wordlists }),
+    muteHttpExceptions: true
+  });
+  debugLog('Cloudflare 동기화 응답: ' + res.getResponseCode() + ' ' + res.getContentText());
 }
 
 // source id로부터 개인복습 스프레드시트 안의 실제 단어목록 탭 이름을 찾음.
