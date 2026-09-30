@@ -202,6 +202,20 @@ function doGet(e) {
 
 **이렇게 교체:**
 ```js
+  let boxNotStarted = 0;
+  let boxShortTerm = 0;
+  let boxLongTerm = 0;
+  all.forEach(word => {
+    const rec = reviewMap[word.key];
+    if (!rec || !rec.box) {
+      boxNotStarted++;
+    } else if (rec.box <= 3) {
+      boxShortTerm++;
+    } else {
+      boxLongTerm++;
+    }
+  });
+
   return {
     total: all.length,
     studied: studiedInSource,
@@ -211,12 +225,15 @@ function doGet(e) {
       const rec = reviewMap[w.key];
       return { korean: w.korean, english: w.english, definition: w.definition, example: w.example, key: w.key, box: rec ? rec.box : 0 };
     }),
+    boxSummary: { notStarted: boxNotStarted, shortTerm: boxShortTerm, longTerm: boxLongTerm },
     stats: getUserStats(sender)
   };
 ```
 
 (`reviewMap`은 이 함수 위쪽에서 이미 `const reviewMap = getReviewMapForUser(sender);`로
-선언되어 있으므로 그대로 재사용하면 됩니다.)
+선언되어 있으므로 그대로 재사용하면 됩니다. `boxSummary`는 홈 화면의 "복습 현황"
+그래프에 쓰이는 값으로, 소스 안의 단어를 미학습/단기기억(박스 1~3)/장기기억(박스
+4~6) 세 구간으로 나눠 센 개수입니다.)
 
 ---
 

@@ -15,15 +15,18 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root {
-    --primary: #4f46e5;
-    --primary-dark: #4338ca;
-    --bg: #f4f5fb;
+    --primary: #6d54e0;
+    --primary-dark: #4a3aa7;
+    --primary-light: #b8a8ec;   /* 미학습 - ordinal ramp light step */
+    --primary-mid: #8670dd;     /* 단기기억 - ordinal ramp mid step */
+    --gradient: linear-gradient(135deg, #8f7cf0 0%, #5b3fd6 100%);
+    --bg: #f4f1fc;
     --card: #ffffff;
-    --text: #1f2333;
-    --muted: #6b7280;
+    --text: #221a3f;
+    --muted: #6f6690;
     --good: #16a34a;
     --bad: #dc2626;
-    --border: #e5e7eb;
+    --border: #e8e2f8;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -38,7 +41,7 @@
   #login-screen {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 32px 20px; text-align: center; gap: 20px;
-    background: linear-gradient(160deg, var(--primary), #6366f1 60%, #818cf8);
+    background: linear-gradient(160deg, #7c65e8, #6248d9 55%, #4a3aa7);
     color: white;
   }
   #login-screen .logo { font-size: 56px; }
@@ -50,16 +53,16 @@
   /* ---------- 공통 헤더 ---------- */
   header.app-header {
     position: sticky; top: 0; z-index: 10;
-    background: var(--primary); color: white;
+    background: var(--gradient); color: white;
     padding: 12px 16px calc(12px + env(safe-area-inset-top, 0px));
     padding-top: max(12px, env(safe-area-inset-top, 0px));
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 12px rgba(90, 62, 214, 0.25);
   }
   header.app-header .title { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 6px; }
   header.app-header .header-actions { display: flex; gap: 6px; align-items: center; }
   .icon-btn {
-    background: rgba(255,255,255,0.15); border: none; color: white; border-radius: 10px;
+    background: rgba(255,255,255,0.18); border: none; color: white; border-radius: 12px;
     width: 34px; height: 34px; font-size: 16px; display: flex; align-items: center; justify-content: center;
     cursor: pointer;
   }
@@ -69,78 +72,116 @@
 
   /* ---------- 카드 공통 ---------- */
   .card {
-    background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid var(--border);
+    background: var(--card); border-radius: 20px; padding: 18px; margin-bottom: 14px;
+    box-shadow: 0 4px 16px rgba(90, 62, 214, 0.07); border: 1px solid var(--border);
   }
 
-  /* ---------- 통계 바 ---------- */
+  /* ---------- 홈 히어로 카드 ---------- */
+  .hero-card {
+    background: var(--gradient); color: white; border-radius: 24px; padding: 22px 20px;
+    margin-bottom: 14px; box-shadow: 0 8px 24px rgba(90, 62, 214, 0.28); position: relative; overflow: hidden;
+  }
+  .hero-card::after {
+    content: ''; position: absolute; top: -40px; right: -30px; width: 140px; height: 140px;
+    border-radius: 50%; background: rgba(255,255,255,0.12);
+  }
+  .hero-greeting { font-size: 15px; opacity: 0.9; margin-bottom: 2px; position: relative; }
+  .hero-headline { font-size: 22px; font-weight: 800; line-height: 1.35; position: relative; }
+  .hero-streak { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px;
+    background: rgba(255,255,255,0.16); padding: 6px 12px; border-radius: 999px; position: relative; }
+
+  /* ---------- 복습 현황 그래프 ---------- */
+  .status-card .status-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .status-card h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--muted); }
+  .status-card .status-total { font-size: 15px; font-weight: 800; color: var(--text); }
+  .status-total .n { font-size: 26px; }
+
+  .status-bar {
+    display: flex; height: 16px; border-radius: 999px; overflow: hidden; background: var(--border);
+    gap: 2px;
+  }
+  .status-bar .seg { height: 100%; transition: width 0.4s ease; }
+  .status-bar .seg:first-child { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+  .status-bar .seg:last-child { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+  .status-seg-notstarted { background: var(--primary-light); }
+  .status-seg-shortterm { background: var(--primary-mid); }
+  .status-seg-longterm { background: var(--primary-dark); }
+
+  .status-legend { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; }
+  .status-legend .item { flex: 1; text-align: center; }
+  .status-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+  .status-legend .label { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .status-legend .count { font-size: 17px; font-weight: 800; color: var(--text); margin-top: 2px; }
+
+  /* ---------- 통계 바 (요약 화면용) ---------- */
   .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .stat-box { text-align: center; padding: 10px 4px; }
   .stat-box .num { font-size: 20px; font-weight: 800; color: var(--primary); }
   .stat-box .label { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
   select#source-select {
-    width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border);
-    font-size: 15px; background: white; margin-top: 8px;
+    width: 100%; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--border);
+    font-size: 15px; background: #faf9ff; margin-top: 8px; color: var(--text);
   }
 
   .primary-btn {
-    width: 100%; padding: 14px; border-radius: 14px; border: none; background: var(--primary);
+    width: 100%; padding: 15px; border-radius: 999px; border: none; background: var(--gradient);
     color: white; font-size: 16px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 6px 16px rgba(90, 62, 214, 0.3);
   }
-  .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .primary-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
   .secondary-btn {
-    width: 100%; padding: 12px; border-radius: 14px; border: 1px solid var(--border); background: white;
+    width: 100%; padding: 12px; border-radius: 999px; border: 1.5px solid var(--border); background: white;
     color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer;
   }
 
-  .segmented { display: flex; background: #eef0fb; border-radius: 12px; padding: 3px; margin-top: 8px; }
+  .segmented { display: flex; background: #ede8fb; border-radius: 999px; padding: 3px; margin-top: 8px; }
   .segmented button {
-    flex: 1; border: none; background: transparent; padding: 8px 4px; border-radius: 9px;
+    flex: 1; border: none; background: transparent; padding: 9px 4px; border-radius: 999px;
     font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer;
   }
-  .segmented button.active { background: white; color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .segmented button.active { background: white; color: var(--primary); box-shadow: 0 2px 6px rgba(90, 62, 214, 0.15); }
 
   /* ---------- 퀴즈 화면 ---------- */
-  .progress-bar-track { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
-  .progress-bar-fill { height: 100%; background: var(--primary); transition: width 0.25s ease; }
+  .progress-bar-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
+  .progress-bar-fill { height: 100%; background: var(--gradient); transition: width 0.25s ease; }
 
   .quiz-mode-badge {
-    display: inline-block; font-size: 11px; font-weight: 700; color: var(--primary);
-    background: #eef0fb; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+    display: inline-block; font-size: 11px; font-weight: 700; color: white;
+    background: var(--gradient); padding: 5px 12px; border-radius: 999px; margin-bottom: 12px;
   }
   .quiz-prompt { font-size: 22px; font-weight: 700; line-height: 1.4; margin-bottom: 4px; word-break: keep-all; }
   .quiz-subtext { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
 
   input.quiz-text-input {
-    width: 100%; padding: 14px; font-size: 17px; border-radius: 12px; border: 2px solid var(--border);
-    margin-bottom: 12px;
+    width: 100%; padding: 14px 16px; font-size: 17px; border-radius: 16px; border: 2px solid var(--border);
+    margin-bottom: 12px; background: #faf9ff;
   }
-  input.quiz-text-input:focus { outline: none; border-color: var(--primary); }
+  input.quiz-text-input:focus { outline: none; border-color: var(--primary); background: white; }
   input.quiz-text-input.correct { border-color: var(--good); background: #f0fdf4; }
   input.quiz-text-input.wrong { border-color: var(--bad); background: #fef2f2; }
 
   .mc-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
   .mc-option {
-    text-align: left; padding: 14px; border-radius: 12px; border: 2px solid var(--border); background: white;
-    font-size: 15px; cursor: pointer;
+    text-align: left; padding: 14px 16px; border-radius: 16px; border: 2px solid var(--border); background: #faf9ff;
+    font-size: 15px; cursor: pointer; transition: border-color 0.15s ease;
   }
   .mc-option.correct { border-color: var(--good); background: #f0fdf4; }
   .mc-option.wrong { border-color: var(--bad); background: #fef2f2; }
   .mc-option:disabled { opacity: 0.7; }
 
   .scramble-answer {
-    min-height: 48px; border: 2px dashed var(--border); border-radius: 12px; padding: 8px;
+    min-height: 48px; border: 2px dashed var(--border); border-radius: 16px; padding: 8px;
     display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; align-items: flex-start;
   }
   .scramble-bank { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
   .word-chip {
-    padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: #f8f9fc;
+    padding: 9px 14px; border-radius: 999px; border: 1.5px solid var(--border); background: #faf9ff;
     font-size: 14px; cursor: pointer; user-select: none;
   }
-  .word-chip.picked { background: var(--primary); color: white; border-color: var(--primary); }
+  .word-chip.picked { background: var(--gradient); color: white; border-color: transparent; }
 
-  .flashcard-reveal { padding: 14px; background: #f8f9fc; border-radius: 12px; margin-bottom: 12px; font-size: 15px; line-height: 1.7; }
+  .flashcard-reveal { padding: 14px 16px; background: #f4f1fc; border-radius: 16px; margin-bottom: 12px; font-size: 15px; line-height: 1.7; }
   .flashcard-reveal .kr { font-weight: 700; font-size: 18px; }
   .flashcard-reveal .en { color: var(--primary); font-weight: 700; }
   .flashcard-reveal .ex { color: var(--muted); font-size: 13px; margin-top: 6px; }
@@ -153,7 +194,7 @@
   .quiz-actions button { flex: 1; }
 
   .self-grade-actions { display: flex; gap: 8px; }
-  .self-grade-actions button { flex: 1; padding: 14px; border-radius: 12px; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .self-grade-actions button { flex: 1; padding: 14px; border-radius: 999px; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
   .btn-know { background: #dcfce7; color: var(--good); }
   .btn-dont-know { background: #fee2e2; color: var(--bad); }
 
@@ -164,11 +205,11 @@
 
   /* ---------- 마일스톤 팝업 ---------- */
   #milestone-overlay {
-    position: fixed; inset: 0; background: rgba(15, 15, 30, 0.55); z-index: 50;
+    position: fixed; inset: 0; background: rgba(30, 20, 60, 0.55); z-index: 50;
     display: flex; align-items: center; justify-content: center; padding: 24px;
   }
   #milestone-card {
-    background: white; border-radius: 20px; padding: 28px 22px; text-align: center; max-width: 320px;
+    background: white; border-radius: 24px; padding: 28px 22px; text-align: center; max-width: 320px;
     animation: pop 0.35s ease;
   }
   @keyframes pop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -204,11 +245,35 @@
     <main>
       <!-- ---- 홈 화면 ---- -->
       <div id="home-view">
-        <div class="card" id="stats-card">
-          <div class="stats-grid">
-            <div class="stat-box"><div class="num" id="stat-due">-</div><div class="label">오늘 복습</div></div>
-            <div class="stat-box"><div class="num" id="stat-streak">-</div><div class="label">🔥 연속일</div></div>
-            <div class="stat-box"><div class="num" id="stat-global">-</div><div class="label">누적 정복</div></div>
+        <div class="hero-card" id="hero-card">
+          <div class="hero-greeting" id="hero-greeting">안녕하세요 👋</div>
+          <div class="hero-headline" id="hero-headline">오늘 복습할 표현이<br><span id="stat-due">-</span>개 있어요</div>
+          <div class="hero-streak">🔥 <span id="stat-streak">-</span>일 연속 · 🏆 누적 <span id="stat-global">-</span>개</div>
+        </div>
+
+        <div class="card status-card">
+          <div class="status-head">
+            <h3>복습 현황</h3>
+            <div class="status-total"><span class="n" id="status-total">-</span>개 단어</div>
+          </div>
+          <div class="status-bar">
+            <div class="seg status-seg-notstarted" id="status-seg-notstarted" style="width:34%"></div>
+            <div class="seg status-seg-shortterm" id="status-seg-shortterm" style="width:33%"></div>
+            <div class="seg status-seg-longterm" id="status-seg-longterm" style="width:33%"></div>
+          </div>
+          <div class="status-legend">
+            <div class="item">
+              <div><span class="dot" style="background:var(--primary-light)"></span><span class="label">미학습</span></div>
+              <div class="count" id="status-count-notstarted">-</div>
+            </div>
+            <div class="item">
+              <div><span class="dot" style="background:var(--primary-mid)"></span><span class="label">단기기억</span></div>
+              <div class="count" id="status-count-shortterm">-</div>
+            </div>
+            <div class="item">
+              <div><span class="dot" style="background:var(--primary-dark)"></span><span class="label">장기기억</span></div>
+              <div class="count" id="status-count-longterm">-</div>
+            </div>
           </div>
         </div>
 
@@ -368,14 +433,29 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// 단순 substring 매치만 쓰면 "notice"가 "noticed" 안에서 걸려서 빈칸 뒤에 'd'만
+// 덩그러니 남아 답이 새어나가는 문제가 생긴다. 매치 앞뒤가 알파벳/숫자가 아닐 때만
+// (단어 경계에서만) 인정하고, 못 찾으면 null -> 이 모드는 건너뛰고 다른 모드로 대체된다.
 function findClozeSpan(word) {
-  const idx = word.example.toLowerCase().indexOf(word.english.toLowerCase());
-  if (idx === -1) return null;
-  return {
-    before: word.example.slice(0, idx),
-    match: word.example.slice(idx, idx + word.english.length),
-    after: word.example.slice(idx + word.english.length),
-  };
+  const exampleLower = word.example.toLowerCase();
+  const target = word.english.toLowerCase();
+  const isWordChar = (ch) => !!ch && /[a-z0-9]/i.test(ch);
+
+  let searchFrom = 0;
+  while (true) {
+    const idx = exampleLower.indexOf(target, searchFrom);
+    if (idx === -1) return null;
+    const before = word.example[idx - 1];
+    const after = word.example[idx + target.length];
+    if (!isWordChar(before) && !isWordChar(after)) {
+      return {
+        before: word.example.slice(0, idx),
+        match: word.example.slice(idx, idx + word.english.length),
+        after: word.example.slice(idx + word.english.length),
+      };
+    }
+    searchFrom = idx + 1;
+  }
 }
 
 // ============================================================
@@ -454,7 +534,8 @@ async function boot() {
   state.profile = decodeJwt(state.idToken);
   $('login-screen').classList.add('hidden');
   $('main-app').classList.remove('hidden');
-  $('header-title-text').textContent = state.profile.name ? state.profile.name + '님' : '영어표현 복습';
+  const firstName = state.profile.name ? String(state.profile.name).split(' ')[0] : '';
+  $('hero-greeting').textContent = firstName ? `안녕하세요, ${firstName}님 👋` : '안녕하세요 👋';
 
   try {
     await loadSources();
@@ -487,11 +568,41 @@ async function loadDueReviews() {
   const data = await apiGet('dueReviews', { source: state.selectedSource });
   state.dueData = data;
   state.latestStats = data.stats;
-  $('stat-due').textContent = data.dueCount;
+
   $('stat-streak').textContent = (data.stats && data.stats.streak) || 0;
   $('stat-global').textContent = data.globalStudied || 0;
+  $('hero-headline').innerHTML = data.dueCount === 0
+    ? '오늘 복습할 표현을<br>모두 끝냈어요 🎉'
+    : `오늘 복습할 표현이<br><span id="stat-due">${data.dueCount}</span>개 있어요`;
+
   $('start-review-btn').disabled = data.dueCount === 0;
   $('start-review-btn').textContent = data.dueCount === 0 ? '오늘 복습 완료! 🎉' : `복습 시작하기 (${data.dueCount}개)`;
+
+  renderStatusChart(data);
+}
+
+// 홈 화면 "복습 현황" 그래프. box 1~3(며칠 내 재복습 필요)은 단기기억, 4~6(7일 이상
+// 간격)은 장기기억으로 묶어서 보여준다. boxSummary가 없는 백엔드(STEP 3 패치 전)에서는
+// studied/total로 대략 근사해서 그래프가 완전히 비어 보이지 않게 한다.
+function renderStatusChart(data) {
+  const total = data.total || 0;
+  $('status-total').textContent = total;
+
+  const summary = data.boxSummary || {
+    notStarted: Math.max(total - (data.studied || 0), 0),
+    shortTerm: data.studied || 0,
+    longTerm: 0,
+  };
+
+  const safeTotal = total > 0 ? total : 1;
+  const pct = (n) => ((n / safeTotal) * 100).toFixed(1) + '%';
+
+  $('status-seg-notstarted').style.width = pct(summary.notStarted);
+  $('status-seg-shortterm').style.width = pct(summary.shortTerm);
+  $('status-seg-longterm').style.width = pct(summary.longTerm);
+  $('status-count-notstarted').textContent = summary.notStarted;
+  $('status-count-shortterm').textContent = summary.shortTerm;
+  $('status-count-longterm').textContent = summary.longTerm;
 }
 
 // ============================================================

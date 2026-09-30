@@ -1669,6 +1669,23 @@ function getDueReviews(sender, source) {
   const studiedInSource = all.filter(w => reviewMap[w.key]).length;
   const globalStudied = Object.keys(reviewMap).length;
 
+  // 홈 화면 "복습 현황" 그래프용 - 이 소스 안의 단어들을 세 구간으로 나눠서 개수를 센다.
+  // notStarted: 한 번도 안 배움 / shortTerm: 박스 1~3(며칠 내 다시 봐야 함, 아직 불안정) /
+  // longTerm: 박스 4~6(다음 복습까지 7일 이상 남음, 장기기억에 가까움)
+  let boxNotStarted = 0;
+  let boxShortTerm = 0;
+  let boxLongTerm = 0;
+  all.forEach(word => {
+    const rec = reviewMap[word.key];
+    if (!rec || !rec.box) {
+      boxNotStarted++;
+    } else if (rec.box <= 3) {
+      boxShortTerm++;
+    } else {
+      boxLongTerm++;
+    }
+  });
+
   return {
     total: all.length,
     studied: studiedInSource,
@@ -1679,6 +1696,7 @@ function getDueReviews(sender, source) {
       // box: PWA가 복습 난이도(적응형 모드)를 정할 때 씀. 아직 한 번도 안 배운 단어는 0(가장 쉬운 단계).
       return { korean: w.korean, english: w.english, definition: w.definition, example: w.example, key: w.key, box: rec ? rec.box : 0 };
     }),
+    boxSummary: { notStarted: boxNotStarted, shortTerm: boxShortTerm, longTerm: boxLongTerm },
     stats: getUserStats(sender)
   };
 }
