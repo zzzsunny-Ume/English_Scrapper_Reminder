@@ -12,7 +12,7 @@
 | 텔레그램 수집 봇, 표현 등록/삭제, AI 예문·풀이 생성 | 기존 Apps Script 프로젝트 (`Code.gs`) | ❌ 그대로 유지, 안 건드림 |
 | 로그인 검증, `dueReviews`/`submitReview`/`sources` API | 기존 Apps Script 프로젝트 | ❌ 그대로 유지 |
 | 푸시 구독 저장, `pushTargets` API | 기존 Apps Script 프로젝트에 **추가 패치** | ✅ `backend/code-gs-additions.md`에 패치 코드 제공 |
-| 복습 PWA (다양한 복습 모드, 통계, 알림 토글) | GitHub Pages 등 정적 호스팅 | ✅ `pwa/` |
+| 복습 PWA (다양한 복습 모드, 통계, 알림 토글) | GitHub Pages 등 정적 호스팅 | ✅ `docs/` |
 | 웹푸시 실제 발송 (cron) | Cloudflare Worker | ✅ `worker/` |
 
 ## 아키텍처
@@ -66,11 +66,12 @@ difficulty)" 원칙 — 쉬운 걸 계속 우려먹기보다, 기억이 실제�
 ### 2. PWA 배포 (GitHub Pages 예시)
 
 이 저장소를 GitHub Pages로 배포하려면: 저장소 Settings → Pages → Source를
-"Deploy from a branch"로, 브랜치는 이 브랜치, 폴더는 `/pwa`(또는 `/pwa`를 별도
-브랜치 루트로 옮겨도 됨)로 지정하세요. 배포되는 주소가
+"Deploy from a branch"로, 브랜치는 이 브랜치, 폴더는 `/docs`로 지정하세요
+(GitHub Pages는 브랜치 배포 시 루트 또는 `/docs`만 고를 수 있어서, PWA 파일이
+`docs/` 폴더에 들어있습니다). 배포되는 주소가
 `https://<계정>.github.io/<저장소>/` 형태가 됩니다.
 
-### 3. `pwa/index.html` 상단 설정값 채우기
+### 3. `docs/index.html` 상단 설정값 채우기
 
 ```js
 const API_BASE = 'https://script.google.com/macros/s/여기에_기존_웹앱_배포_ID/exec';
@@ -135,7 +136,7 @@ npx wrangler deploy
 ## 디렉터리 구조
 
 ```
-pwa/                     복습 PWA (정적 파일, GitHub Pages 등에 그대로 배포)
+docs/                    복습 PWA (정적 파일, GitHub Pages 등에 그대로 배포)
   index.html
   manifest.json
   service-worker.js
