@@ -188,15 +188,6 @@
   .vk-key-wide { flex: 1.7; background: #ded5f7; font-size: 15px; text-transform: none; }
   .vk-key-space { flex: 1; text-transform: none; font-size: 13px; color: var(--muted); }
 
-  .mc-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
-  .mc-option {
-    text-align: left; padding: 14px 16px; border-radius: 16px; border: 2px solid var(--border); background: #faf9ff;
-    font-size: 15px; cursor: pointer; transition: border-color 0.15s ease;
-  }
-  .mc-option.correct { border-color: var(--good); background: #f0fdf4; }
-  .mc-option.wrong { border-color: var(--bad); background: #fef2f2; }
-  .mc-option:disabled { opacity: 0.7; }
-
   .scramble-answer {
     min-height: 48px; border: 2px dashed var(--border); border-radius: 16px; padding: 8px;
     display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; align-items: flex-start;
@@ -208,22 +199,12 @@
   }
   .word-chip.picked { background: var(--gradient); color: white; border-color: transparent; }
 
-  .flashcard-reveal { padding: 14px 16px; background: #f4f1fc; border-radius: 16px; margin-bottom: 12px; font-size: 15px; line-height: 1.7; }
-  .flashcard-reveal .kr { font-weight: 700; font-size: 18px; }
-  .flashcard-reveal .en { color: var(--primary); font-weight: 700; }
-  .flashcard-reveal .ex { color: var(--muted); font-size: 13px; margin-top: 6px; }
-
   .quiz-feedback { min-height: 22px; font-size: 14px; font-weight: 700; margin-bottom: 10px; }
   .quiz-feedback.correct { color: var(--good); }
   .quiz-feedback.wrong { color: var(--bad); }
 
   .quiz-actions { display: flex; gap: 8px; }
   .quiz-actions button { flex: 1; }
-
-  .self-grade-actions { display: flex; gap: 8px; }
-  .self-grade-actions button { flex: 1; padding: 14px; border-radius: 999px; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
-  .btn-know { background: #dcfce7; color: var(--good); }
-  .btn-dont-know { background: #fee2e2; color: var(--bad); }
 
   /* ---------- 세션 요약 ---------- */
   .summary-emoji { font-size: 48px; text-align: center; margin-bottom: 8px; }
@@ -468,31 +449,6 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// 단순 substring 매치만 쓰면 "notice"가 "noticed" 안에서 걸려서 빈칸 뒤에 'd'만
-// 덩그러니 남아 답이 새어나가는 문제가 생긴다. 매치 앞뒤가 알파벳/숫자가 아닐 때만
-// (단어 경계에서만) 인정하고, 못 찾으면 null -> 이 모드는 건너뛰고 다른 모드로 대체된다.
-function findClozeSpan(word) {
-  const exampleLower = word.example.toLowerCase();
-  const target = word.english.toLowerCase();
-  const isWordChar = (ch) => !!ch && /[a-z0-9]/i.test(ch);
-
-  let searchFrom = 0;
-  while (true) {
-    const idx = exampleLower.indexOf(target, searchFrom);
-    if (idx === -1) return null;
-    const before = word.example[idx - 1];
-    const after = word.example[idx + target.length];
-    if (!isWordChar(before) && !isWordChar(after)) {
-      return {
-        before: word.example.slice(0, idx),
-        match: word.example.slice(idx, idx + word.english.length),
-        after: word.example.slice(idx + word.english.length),
-      };
-    }
-    searchFrom = idx + 1;
-  }
-}
-
 // ============================================================
 // ===== API 헬퍼 =====
 // ============================================================
@@ -643,35 +599,21 @@ function renderStatusChart(data) {
 // ============================================================
 // ===== 모드 선택 =====
 // ============================================================
-const ALL_MODES = ['kr2en', 'definition2en', 'exampleCloze', 'exampleScramble', 'mcKrToEn', 'mcEnToKr'];
+const ALL_MODES = ['kr2en', 'exampleScramble'];
 
-function modeApplicable(mode, word, poolSize) {
-  switch (mode) {
-    case 'definition2en':
-      return !!word.definition;
-    case 'exampleCloze':
-      return !!word.example && findClozeSpan(word) !== null;
-    case 'exampleScramble':
-      return !!word.example && tokenize(word.example).length >= 3;
-    case 'mcKrToEn':
-    case 'mcEnToKr':
-      return poolSize >= 3;
-    case 'kr2en':
-      return true;
-    default:
-      return true;
-  }
+function modeApplicable(mode, word) {
+  if (mode === 'exampleScramble') return !!word.example && tokenize(word.example).length >= 3;
+  return true; // kr2en은 항상 가능
 }
 
-// 기본은 항상 "한국어 뜻 보고 영어 타이핑"(kr2en) - 박스 단계와 무관. 사용자가
-// 홈 화면에서 "모드 랜덤"으로 바꿨을 때만 6개 모드를 섞어서 낸다.
-function pickMode(word, poolSize) {
+// 기본은 항상 "한국어 뜻 보고 영어 타이핑"(kr2en). 홈 화면에서 "모드 랜덤"으로
+// 바꾸면 단어(kr2en)/문장 나열(exampleScramble) 두 가지를 섞어서 낸다.
+function pickMode(word) {
   if (state.modePreference !== 'random') {
     return 'kr2en';
   }
-  const candidates = ALL_MODES.filter((m) => modeApplicable(m, word, poolSize));
-  if (candidates.length > 0) return candidates[Math.floor(Math.random() * candidates.length)];
-  return 'kr2en';
+  const candidates = ALL_MODES.filter((m) => modeApplicable(m, word));
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 // ============================================================
@@ -699,9 +641,8 @@ function renderCurrentQuestion() {
   }
 
   const word = state.queue[idx];
-  const pool = state.queue.filter((w) => w.key !== word.key);
-  const mode = pickMode(word, pool.length);
-  renderQuizCard(word, mode, pool);
+  const mode = pickMode(word);
+  renderQuizCard(word, mode);
 }
 
 function gradeAnswer(word, isCorrect) {
@@ -760,15 +701,10 @@ function exitQuizSession() {
 // ============================================================
 const MODE_LABELS = {
   kr2en: '🇰🇷 → 🇺🇸 뜻 보고 영어 맞히기',
-  definition2en: '📖 영영풀이 보고 맞히기',
-  exampleCloze: '✍️ 예문 빈칸 채우기',
   exampleScramble: '🧩 예문 단어 배열하기',
-  mcKrToEn: '🇰🇷 → 🇺🇸 객관식',
-  mcEnToKr: '🇺🇸 → 🇰🇷 객관식',
-  flashcard: '🗂️ 플래시카드',
 };
 
-function renderQuizCard(word, mode, pool) {
+function renderQuizCard(word, mode) {
   hideVirtualKeyboard(); // 매 문제마다 깨끗이 초기화 - 타이핑 모드면 buildTypingUI가 다시 띄움
   const card = $('quiz-card');
   card.innerHTML = '';
@@ -778,16 +714,8 @@ function renderQuizCard(word, mode, pool) {
   badge.textContent = MODE_LABELS[mode] || mode;
   card.appendChild(badge);
 
-  const renderers = {
-    kr2en: renderKr2En,
-    definition2en: renderDefinition2En,
-    exampleCloze: renderExampleCloze,
-    exampleScramble: renderExampleScramble,
-    mcKrToEn: renderMcKrToEn,
-    mcEnToKr: renderMcEnToKr,
-    flashcard: renderFlashcard,
-  };
-  (renderers[mode] || renderFlashcard)(card, word, pool);
+  const renderers = { kr2en: renderKr2En, exampleScramble: renderExampleScramble };
+  (renderers[mode] || renderKr2En)(card, word);
 }
 
 function buildTypingUI(card, promptHtml, subtext, targetValue, word) {
@@ -934,16 +862,6 @@ function renderKr2En(card, word) {
   buildTypingUI(card, escapeHtml(word.korean), '영어로 답해보세요', word.english, word);
 }
 
-function renderDefinition2En(card, word) {
-  buildTypingUI(card, escapeHtml(word.definition), `힌트: 한글 뜻은 "${escapeHtml(word.korean)}"`, word.english, word);
-}
-
-function renderExampleCloze(card, word) {
-  const span = findClozeSpan(word);
-  const html = `${escapeHtml(span.before)}<span style="color:var(--primary);">_____</span>${escapeHtml(span.after)}`;
-  buildTypingUI(card, html, `힌트: "${escapeHtml(word.korean)}"`, word.english, word);
-}
-
 function renderExampleScramble(card, word) {
   const original = tokenize(word.example);
   const shuffled = shuffle(original);
@@ -1032,108 +950,6 @@ function renderExampleScramble(card, word) {
   }
   submitBtn.addEventListener('click', submit);
   nextBtn.addEventListener('click', goToNextQuestion);
-}
-
-function renderMultipleChoice(card, word, pool, questionField, optionField, promptPrefix) {
-  const prompt = document.createElement('div');
-  prompt.className = 'quiz-prompt';
-  prompt.textContent = word[questionField];
-  card.appendChild(prompt);
-
-  if (promptPrefix) {
-    const sub = document.createElement('div');
-    sub.className = 'quiz-subtext';
-    sub.textContent = promptPrefix;
-    card.appendChild(sub);
-  }
-
-  const distractorPool = pool.filter((w) => w[optionField] && w[optionField] !== word[optionField]);
-  const distractors = shuffle(distractorPool).slice(0, 3).map((w) => w[optionField]);
-  const options = shuffle([word[optionField], ...distractors]);
-
-  const optionsWrap = document.createElement('div');
-  optionsWrap.className = 'mc-options';
-  card.appendChild(optionsWrap);
-
-  const feedback = document.createElement('div');
-  feedback.className = 'quiz-feedback';
-  card.appendChild(feedback);
-
-  const actions = document.createElement('div');
-  actions.className = 'quiz-actions';
-  const nextBtn = document.createElement('button');
-  nextBtn.className = 'primary-btn hidden';
-  nextBtn.textContent = '다음 →';
-  actions.appendChild(nextBtn);
-  card.appendChild(actions);
-  nextBtn.addEventListener('click', goToNextQuestion);
-
-  let answered = false;
-  options.forEach((opt) => {
-    const btn = document.createElement('button');
-    btn.className = 'mc-option';
-    btn.textContent = opt;
-    btn.addEventListener('click', () => {
-      if (answered) return;
-      answered = true;
-      const correct = opt === word[optionField];
-      Array.from(optionsWrap.children).forEach((b) => {
-        b.disabled = true;
-        if (b.textContent === word[optionField]) b.classList.add('correct');
-        else if (b === btn) b.classList.add('wrong');
-      });
-      feedback.className = 'quiz-feedback ' + (correct ? 'correct' : 'wrong');
-      feedback.textContent = correct ? '정답이에요! ✅' : '아쉬워요 ❌';
-      nextBtn.classList.remove('hidden');
-      gradeAnswer(word, correct);
-    });
-    optionsWrap.appendChild(btn);
-  });
-}
-
-function renderMcKrToEn(card, word, pool) {
-  renderMultipleChoice(card, word, pool, 'korean', 'english', '알맞은 영어 표현을 고르세요');
-}
-function renderMcEnToKr(card, word, pool) {
-  renderMultipleChoice(card, word, pool, 'english', 'korean', '알맞은 한글 뜻을 고르세요');
-}
-
-function renderFlashcard(card, word) {
-  const prompt = document.createElement('div');
-  prompt.className = 'quiz-prompt';
-  prompt.textContent = word.korean;
-  card.appendChild(prompt);
-
-  const reveal = document.createElement('div');
-  reveal.className = 'flashcard-reveal hidden';
-  reveal.innerHTML = `<div class="en">${escapeHtml(word.english)}</div>${word.example ? `<div class="ex">${escapeHtml(word.example)}</div>` : ''}`;
-  card.appendChild(reveal);
-
-  const revealBtn = document.createElement('button');
-  revealBtn.className = 'secondary-btn';
-  revealBtn.textContent = '정답 보기';
-  revealBtn.style.marginBottom = '12px';
-  card.appendChild(revealBtn);
-
-  const gradeArea = document.createElement('div');
-  gradeArea.className = 'self-grade-actions hidden';
-  gradeArea.innerHTML = `<button class="btn-dont-know">몰랐어요 😅</button><button class="btn-know">알고 있었어요 ✅</button>`;
-  card.appendChild(gradeArea);
-
-  revealBtn.addEventListener('click', () => {
-    reveal.classList.remove('hidden');
-    revealBtn.classList.add('hidden');
-    gradeArea.classList.remove('hidden');
-  });
-
-  gradeArea.querySelector('.btn-know').addEventListener('click', () => {
-    gradeAnswer(word, true);
-    goToNextQuestion();
-  });
-  gradeArea.querySelector('.btn-dont-know').addEventListener('click', () => {
-    gradeAnswer(word, false);
-    goToNextQuestion();
-  });
 }
 
 // ============================================================
