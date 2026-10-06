@@ -1,7 +1,7 @@
 // 오프라인 앱 셸 캐싱 + 웹푸시 수신/클릭 처리.
-// API 호출(Apps Script doGet)은 항상 최신 데이터가 필요하므로 캐싱하지 않고 네트워크로만 보낸다.
+// API 호출(worker-api)은 항상 최신 데이터가 필요하므로 캐싱하지 않고 네트워크로만 보낸다.
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2'; // v1 캐시에 API 응답이 잘못 섞여 들어간 적이 있어서, 기존 설치본도 강제로 비우기 위해 버전 올림
 const CACHE_NAME = `english-review-${CACHE_VERSION}`;
 
 const APP_SHELL = [
@@ -30,13 +30,14 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Apps Script API나 구글 로그인 관련 요청은 절대 캐싱하지 않고 그대로 네트워크로
-  if (
-    event.request.method !== 'GET' ||
-    url.hostname.includes('script.google.com') ||
-    url.hostname.includes('googleapis.com') ||
-    url.hostname.includes('accounts.google.com')
-  ) {
+  // 블랙리스트(특정 API 호스트만 제외) 대신 화이트리스트로 바꿈 - 우리 앱 셸(같은
+  // origin, GET)만 캐싱 대상으로 삼고 그 외(worker-api, 구글 로그인 등 다른 origin
+  // 전부)는 항상 네트워크로 직행시킨다. 예전엔 API 호스트를 하나씩 나열해서 막았는데,
+  // 백엔드를 Cloudflare Worker로 옮기면서 그 목록이 안 맞게 돼 API 응답까지 캐싱되어
+  // 버렸음 - 홈 화면에 설치해서 쓰는 사람은 매번 새로고침해야만 최신 데이터가 보이는
+  // 원인이었다.
+  const isSameOrigin = url.origin === self.location.origin;
+  if (event.request.method !== 'GET' || !isSameOrigin) {
     return;
   }
 
