@@ -425,3 +425,16 @@ function syncToCloudflare(wordlists, personalSheets) {
 
 저장 후 재배포하고, `refreshWordListToReviewSheet`를 한 번 수동 실행하거나
 텔레그램 메시지를 하나 보내 폴링이 돌게 하면 KV에 데이터가 채워집니다.
+
+---
+
+## STEP 7 (선택). 매일 아침 멤버별 학습 현황 텔레그램 리포트
+
+`Code.full.gs`에 이미 반영되어 있습니다 (`processUpdate`에서 `MAIN_CHAT_ID` 자동 저장 +
+`sendDailyMemberStats`/`setupDailyStatsTrigger` 함수 추가). 적용하려면:
+
+1. `worker-api`가 STEP 6까지 배포되어 있어야 함 (멤버 통계는 Cloudflare KV에서 조회)
+2. Apps Script 편집기에서 `setupDailyStatsTrigger` 함수를 **딱 한 번 수동 실행**(▶)
+   → 매일 오전 9시대에 자동으로 `sendDailyMemberStats`가 돌도록 트리거 등록됨
+3. 보낼 방은 자동으로 정해짐 - 텔레그램 방에서 아무 메시지나 한 번 오면 그 방의
+   chatId가 스크립트 속성 `MAIN_CHAT_ID`에 자동 저장되고, 그 방으로 리포트가 감

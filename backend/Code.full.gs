@@ -208,6 +208,10 @@ function processUpdate(update, resultsByChat) {
   }
 
   const chatId = message.chat.id;
+  // 매일 아침 학습 현황을 "먼저" 보낼 때 어느 방에 보내야 할지 알아야 하는데, 사람이
+  // 쓴 메시지라면(명령어/잡담 가리지 않고) 그게 곧 "현재 활성 채팅방"이라는 뜻이므로
+  // 그때마다 최신 chatId를 기억해둔다. 방을 여러 개 쓰면 마지막으로 메시지가 온 방 기준.
+  PropertiesService.getScriptProperties().setProperty('MAIN_CHAT_ID', String(chatId));
   // 아이폰/갤럭시 자동완성이 " 를 곡선 따옴표(" ")로 바꿔버리는 경우가 있어서,
   // 파싱 전에 전부 일반 따옴표로 통일해준다 (안 하면 예문이 통째로 뜻에 섞여버림)
   let text = message.text.trim().replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
@@ -1632,6 +1636,73 @@ function syncToCloudflare(wordlists, personalSheets) {
     muteHttpExceptions: true
   });
   debugLog('Cloudflare 동기화 응답: ' + res.getResponseCode() + ' ' + res.getContentText());
+}
+
+// ===================================================================
+// ===== 매일 아침 멤버별 학습 현황 리포트 =====
+// ===================================================================
+
+/**
+ * [최초 1회만 실행] 매일 오전 9시에 sendDailyMemberStats가 자동으로 돌도록 트리거 등록.
+ * Apps Script 편집기에서 이 함수를 딱 한 번 수동 실행(▶)하면 됨. 다시 실행해도
+ * 기존 동일 트리거를 먼저 지우고 새로 만들기 때문에 중복 등록되진 않음.
+ * (정확히 09:00:00에 도는 건 보장 안 되고, Apps Script 특성상 9시대 어딘가에 돎)
+ */
+function setupDailyStatsTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'sendDailyMemberStats') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sendDailyMemberStats')
+    .timeBased()
+    .atHour(9)
+    .everyDays(1)
+    .inTimezone(Session.getScriptTimeZone())
+    .create();
+  debugLog('매일 오전 9시 학습 현황 트리거 등록 완료');
+}
+
+/**
+ * 시간 트리거로 매일 아침 실행 - Cloudflare KV에서 멤버별 누적 학습 단어 수를 가져와
+ * 텔레그램 방에 순위표로 보낸다. 보낼 방은 MAIN_CHAT_ID(최근에 메시지가 온 방,
+ * processUpdate에서 자동 기억됨)를 사용 - 아직 메시지를 한 번도 못 받았으면 건너뜀.
+ */
+function sendDailyMemberStats() {
+  const chatId = PropertiesService.getScriptProperties().getProperty('MAIN_CHAT_ID');
+  if (!chatId) {
+    debugLog('MAIN_CHAT_ID가 아직 없어서 학습 현황 전송 스킵 (메시지가 한 번이라도 오면 자동 저장됨)');
+    return;
+  }
+
+  const url = PropertiesService.getScriptProperties().getProperty('CLOUDFLARE_API_URL');
+  const secret = PropertiesService.getScriptProperties().getProperty('CLOUDFLARE_SYNC_SECRET');
+  if (!url || !secret) {
+    debugLog('CLOUDFLARE_API_URL 또는 CLOUDFLARE_SYNC_SECRET이 설정되지 않아 학습 현황 전송을 건너뜀');
+    return;
+  }
+
+  try {
+    const res = UrlFetchApp.fetch(url + '?action=memberStats&secret=' + encodeURIComponent(secret), {
+      muteHttpExceptions: true
+    });
+    const data = JSON.parse(res.getContentText());
+    if (data.error) {
+      debugLog('학습 현황 조회 실패: ' + data.error);
+      return;
+    }
+
+    const members = data.members || [];
+    if (members.length === 0) {
+      sendTelegramMessage(chatId, '📊 아직 복습 기록이 있는 멤버가 없어요.');
+      return;
+    }
+
+    members.sort((a, b) => b.count - a.count);
+    const lines = members.map((m, i) => `${i + 1}. ${m.label} - ${m.count}개`);
+    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy.MM.dd');
+    sendTelegramMessage(chatId, `📊 ${today} 학습 현황 (누적 정복 단어 수)\n\n${lines.join('\n')}`);
+  } catch (err) {
+    debugLog('학습 현황 전송 에러: ' + err);
+  }
 }
 
 // source id로부터 개인복습 스프레드시트 안의 실제 단어목록 탭 이름을 찾음.

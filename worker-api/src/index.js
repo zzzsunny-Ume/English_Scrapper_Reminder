@@ -39,6 +39,11 @@ export default {
         return json(await getPushTargets(env, url.searchParams.get('secret') || ''));
       }
 
+      // Apps Script가 매일 아침 멤버별 학습 현황을 텔레그램에 보낼 때 호출 - 서버 대 서버, SYNC_SECRET 재사용
+      if (action === 'memberStats') {
+        return json(await getMemberStats(env, url.searchParams.get('secret') || ''));
+      }
+
       const idToken = url.searchParams.get('idToken') || '';
       const auth = await verifyGoogleIdToken(idToken, env);
       if (!auth) return json({ error: 'unauthorized' });
@@ -250,6 +255,25 @@ async function getPushTargets(env, secret) {
     }
   }
   return { targets };
+}
+
+// 매일 아침 봇이 텔레그램에 보낼 "멤버별 학습 현황" - 소스 구분 없이 그 사람이 지금까지
+// 맞혀본 적 있는 전체 표현 수(globalStudied와 동일한 셈법)를 인원별로 센다.
+// 이메일 전체를 그룹 채팅에 노출하지 않도록 @ 앞부분만 label로 잘라서 돌려준다.
+async function getMemberStats(env, secret) {
+  if (!env.SYNC_SECRET || secret !== env.SYNC_SECRET) return { error: 'unauthorized' };
+
+  const list = await env.KV.list({ prefix: 'review:' });
+  const members = [];
+  for (const k of list.keys) {
+    const email = k.name.slice('review:'.length);
+    const reviewMap = await kvGetJson(env, k.name, {});
+    const count = Object.keys(reviewMap).length;
+    if (count > 0) {
+      members.push({ email, label: email.split('@')[0], count });
+    }
+  }
+  return { members };
 }
 
 // ============================================================
