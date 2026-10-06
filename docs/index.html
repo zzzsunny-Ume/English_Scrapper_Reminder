@@ -159,13 +159,28 @@
   .quiz-prompt { font-size: 22px; font-weight: 700; line-height: 1.4; margin-bottom: 4px; word-break: keep-all; }
   .quiz-subtext { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
 
-  input.quiz-text-input {
-    width: 100%; padding: 14px 16px; font-size: 17px; border-radius: 16px; border: 2px solid var(--border);
-    margin-bottom: 12px; background: #faf9ff;
+  /* 타이핑 답 표시 (네이티브 input 대신 - 폰 키보드가 안 뜨게) */
+  .answer-display {
+    min-height: 52px; padding: 14px 16px; border-radius: 16px; border: 2px solid var(--border);
+    margin-bottom: 14px; background: #faf9ff; font-size: 19px; font-weight: 700;
+    letter-spacing: 0.3px; display: flex; align-items: center; word-break: break-all;
   }
-  input.quiz-text-input:focus { outline: none; border-color: var(--primary); background: white; }
-  input.quiz-text-input.correct { border-color: var(--good); background: #f0fdf4; }
-  input.quiz-text-input.wrong { border-color: var(--bad); background: #fef2f2; }
+  .answer-display.placeholder { color: var(--muted); font-weight: 400; font-size: 15px; }
+  .answer-display.correct { border-color: var(--good); background: #f0fdf4; color: var(--text); }
+  .answer-display.wrong { border-color: var(--bad); background: #fef2f2; color: var(--text); }
+
+  /* 테마 전용 가상 키보드 */
+  .vk { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .vk-row { display: flex; gap: 4px; }
+  .vk-key {
+    flex: 1; min-width: 0; height: 42px; padding: 0; border-radius: 8px; border: none;
+    background: #ede8fb; color: var(--text); font-size: 15px; font-weight: 700;
+    text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .vk-key:active { background: var(--primary-light); color: white; }
+  .vk-key:disabled { opacity: 0.5; }
+  .vk-key-wide { flex: 1.7; background: #ded5f7; font-size: 15px; text-transform: none; }
+  .vk-key-space { flex: 1; text-transform: none; font-size: 13px; color: var(--muted); }
 
   .mc-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
   .mc-option {
@@ -289,8 +304,8 @@
 
           <label style="font-size:13px; font-weight:700; color:var(--muted); display:block; margin-top:14px;">복습 방식</label>
           <div class="segmented" id="mode-pref-segmented">
-            <button data-pref="adaptive" class="active">적응형 (추천)</button>
-            <button data-pref="random">전체 랜덤</button>
+            <button data-pref="adaptive" class="active">한→영 타이핑 (기본)</button>
+            <button data-pref="random">모드 랜덤</button>
           </div>
         </div>
 
@@ -617,24 +632,9 @@ function renderStatusChart(data) {
 }
 
 // ============================================================
-// ===== 적응형 모드 선택 =====
+// ===== 모드 선택 =====
 // ============================================================
-const MODE_TIERS = {
-  recognition: ['mcKrToEn', 'mcEnToKr'],
-  cued: ['definition2en', 'exampleCloze'],
-  free: ['kr2en', 'exampleScramble'],
-  maintenance: ['kr2en', 'exampleScramble', 'definition2en'],
-};
 const ALL_MODES = ['kr2en', 'definition2en', 'exampleCloze', 'exampleScramble', 'mcKrToEn', 'mcEnToKr'];
-
-function tierForBox(box) {
-  if (box === undefined || box === null || box === '') return null;
-  const b = Number(box);
-  if (b <= 1) return 'recognition';
-  if (b <= 3) return 'cued';
-  if (b <= 5) return 'free';
-  return 'maintenance';
-}
 
 function modeApplicable(mode, word, poolSize) {
   switch (mode) {
@@ -654,13 +654,15 @@ function modeApplicable(mode, word, poolSize) {
   }
 }
 
+// 기본은 항상 "한국어 뜻 보고 영어 타이핑"(kr2en) - 박스 단계와 무관. 사용자가
+// 홈 화면에서 "모드 랜덤"으로 바꿨을 때만 6개 모드를 섞어서 낸다.
 function pickMode(word, poolSize) {
-  const tier = state.modePreference === 'random' ? null : tierForBox(word.box);
-  const pool = tier ? MODE_TIERS[tier] : ALL_MODES;
-  const candidates = pool.filter((m) => modeApplicable(m, word, poolSize));
+  if (state.modePreference !== 'random') {
+    return 'kr2en';
+  }
+  const candidates = ALL_MODES.filter((m) => modeApplicable(m, word, poolSize));
   if (candidates.length > 0) return candidates[Math.floor(Math.random() * candidates.length)];
-  if (modeApplicable('kr2en', word, poolSize)) return 'kr2en';
-  return 'flashcard';
+  return 'kr2en';
 }
 
 // ============================================================
@@ -789,18 +791,39 @@ function buildTypingUI(card, promptHtml, subtext, targetValue, word) {
     card.appendChild(sub);
   }
 
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'quiz-text-input';
-  input.placeholder = '정답을 입력하세요';
-  input.autocomplete = 'off';
-  input.autocapitalize = 'off';
-  input.spellcheck = false;
-  card.appendChild(input);
+  // 네이티브 <input>을 쓰지 않는다 - 포커스가 가는 순간 폰 자체 키보드가 뜨는 걸
+  // 막기 위해, 타이핑 결과를 보여주기만 하는 div + 우리 테마의 자체 키보드로 대체.
+  const display = document.createElement('div');
+  display.className = 'answer-display placeholder';
+  display.textContent = '정답을 입력하세요';
+  card.appendChild(display);
 
   const feedback = document.createElement('div');
   feedback.className = 'quiz-feedback';
   card.appendChild(feedback);
+
+  let typed = '';
+  let answered = false;
+
+  function renderDisplay() {
+    const isEmpty = typed.length === 0;
+    display.textContent = isEmpty ? '정답을 입력하세요' : typed;
+    display.classList.toggle('placeholder', isEmpty);
+  }
+
+  function pressKey(ch) {
+    if (answered) return;
+    typed += ch;
+    renderDisplay();
+  }
+  function backspace() {
+    if (answered) return;
+    typed = typed.slice(0, -1);
+    renderDisplay();
+  }
+
+  const keyboard = buildVirtualKeyboard(pressKey, backspace);
+  card.appendChild(keyboard);
 
   const actions = document.createElement('div');
   actions.className = 'quiz-actions';
@@ -814,24 +837,65 @@ function buildTypingUI(card, promptHtml, subtext, targetValue, word) {
   actions.appendChild(nextBtn);
   card.appendChild(actions);
 
-  let answered = false;
   function submit() {
     if (answered) return;
     answered = true;
-    const correct = isCloseEnough(input.value, targetValue);
-    input.classList.add(correct ? 'correct' : 'wrong');
-    input.disabled = true;
+    const correct = isCloseEnough(typed, targetValue);
+    display.classList.remove('placeholder');
+    display.classList.add(correct ? 'correct' : 'wrong');
+    if (typed.length === 0) display.textContent = '(입력 안 함)';
     feedback.className = 'quiz-feedback ' + (correct ? 'correct' : 'wrong');
     feedback.textContent = correct ? '정답이에요! ✅' : `아쉬워요 ❌ 정답: ${targetValue}`;
     submitBtn.classList.add('hidden');
     nextBtn.classList.remove('hidden');
+    keyboard.querySelectorAll('button').forEach((b) => (b.disabled = true));
     gradeAnswer(word, correct);
   }
 
   submitBtn.addEventListener('click', submit);
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   nextBtn.addEventListener('click', goToNextQuestion);
-  setTimeout(() => input.focus(), 50);
+}
+
+// 테마에 맞춘 자체 QWERTY 키보드. 네이티브 입력 요소를 아예 안 쓰므로 폰 키보드가
+// 뜰 일이 없다. 여러 단어 표현(give up, tell on 등) 입력을 위해 스페이스 키 포함.
+function buildVirtualKeyboard(onKey, onBackspace) {
+  const wrap = document.createElement('div');
+  wrap.className = 'vk';
+
+  const rows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+  rows.forEach((letters, i) => {
+    const row = document.createElement('div');
+    row.className = 'vk-row';
+    [...letters].forEach((ch) => {
+      const key = document.createElement('button');
+      key.type = 'button';
+      key.className = 'vk-key';
+      key.textContent = ch;
+      key.addEventListener('click', () => onKey(ch));
+      row.appendChild(key);
+    });
+    if (i === 2) {
+      const bs = document.createElement('button');
+      bs.type = 'button';
+      bs.className = 'vk-key vk-key-wide';
+      bs.textContent = '⌫';
+      bs.addEventListener('click', onBackspace);
+      row.appendChild(bs);
+    }
+    wrap.appendChild(row);
+  });
+
+  const spaceRow = document.createElement('div');
+  spaceRow.className = 'vk-row';
+  const spaceKey = document.createElement('button');
+  spaceKey.type = 'button';
+  spaceKey.className = 'vk-key vk-key-space';
+  spaceKey.textContent = 'space';
+  spaceKey.addEventListener('click', () => onKey(' '));
+  spaceRow.appendChild(spaceKey);
+  wrap.appendChild(spaceRow);
+
+  return wrap;
 }
 
 function renderKr2En(card, word) {
