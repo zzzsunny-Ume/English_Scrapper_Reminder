@@ -143,7 +143,13 @@
   .segmented button.active { background: white; color: var(--primary); box-shadow: 0 2px 6px rgba(90, 62, 214, 0.15); }
 
   /* ---------- 퀴즈 화면 ---------- */
-  .progress-bar-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
+  .quiz-top-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .quiz-exit-btn {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; border: none;
+    background: var(--border); color: var(--muted); font-size: 14px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .progress-bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 0; }
   .progress-bar-fill { height: 100%; background: var(--gradient); transition: width 0.25s ease; }
 
   .quiz-mode-badge {
@@ -297,7 +303,10 @@
 
       <!-- ---- 퀴즈 화면 ---- -->
       <div id="quiz-view" class="hidden">
-        <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill" style="width:0%"></div></div>
+        <div class="quiz-top-row">
+          <button id="quiz-exit-btn" class="quiz-exit-btn" title="홈으로 나가기">✕</button>
+          <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill" style="width:0%"></div></div>
+        </div>
         <div class="card" id="quiz-card"><!-- JS가 채움 --></div>
       </div>
 
@@ -723,6 +732,16 @@ function backToHome() {
   $('home-view').classList.remove('hidden');
 }
 
+// 퀴즈 중간에 "✕"로 나가기 - 끝까지 안 풀어도 그동안 제출한 정답/오답은 이미
+// submitReview로 서버에 반영돼 있으니(gradeAnswer가 문제마다 바로 보냄) 그냥
+// 세션을 버리고 홈으로 돌아가면 됨. 최신 숫자 보여주려고 dueReviews만 다시 불러온다.
+function exitQuizSession() {
+  $('quiz-view').classList.add('hidden');
+  $('summary-view').classList.add('hidden');
+  $('home-view').classList.remove('hidden');
+  loadDueReviews();
+}
+
 // ============================================================
 // ===== 퀴즈 카드 렌더러 =====
 // ============================================================
@@ -1141,6 +1160,7 @@ $('logout-btn').addEventListener('click', logout);
 $('push-toggle-btn').addEventListener('click', togglePush);
 $('start-review-btn').addEventListener('click', startReview);
 $('back-home-btn').addEventListener('click', backToHome);
+$('quiz-exit-btn').addEventListener('click', exitQuizSession);
 $('milestone-close-btn').addEventListener('click', () => $('milestone-overlay').classList.add('hidden'));
 
 $('source-select').addEventListener('change', (e) => {
