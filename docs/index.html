@@ -169,8 +169,14 @@
   .answer-display.correct { border-color: var(--good); background: #f0fdf4; color: var(--text); }
   .answer-display.wrong { border-color: var(--bad); background: #fef2f2; color: var(--text); }
 
-  /* 테마 전용 가상 키보드 */
-  .vk { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  /* 테마 전용 가상 키보드 - 네이티브 키보드처럼 화면 하단에 고정 */
+  .vk-dock {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    background: #ece5fb; border-top: 1px solid var(--border);
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -6px 20px rgba(90, 62, 214, 0.15);
+  }
+  .vk { display: flex; flex-direction: column; gap: 6px; }
   .vk-row { display: flex; gap: 4px; }
   .vk-key {
     flex: 1; min-width: 0; height: 42px; padding: 0; border-radius: 8px; border: none;
@@ -353,6 +359,9 @@
       <button id="milestone-close-btn" class="primary-btn">계속하기</button>
     </div>
   </div>
+
+  <!-- 네이티브 키보드처럼 화면 하단에 고정되는 자체 키보드 -->
+  <div id="vk-dock" class="vk-dock hidden"></div>
 </div>
 
 <script>
@@ -712,6 +721,7 @@ function goToNextQuestion() {
 }
 
 function finishSession() {
+  hideVirtualKeyboard();
   $('quiz-view').classList.add('hidden');
   $('summary-view').classList.remove('hidden');
   const { correct, wrong } = state.sessionStats;
@@ -738,6 +748,7 @@ function backToHome() {
 // submitReview로 서버에 반영돼 있으니(gradeAnswer가 문제마다 바로 보냄) 그냥
 // 세션을 버리고 홈으로 돌아가면 됨. 최신 숫자 보여주려고 dueReviews만 다시 불러온다.
 function exitQuizSession() {
+  hideVirtualKeyboard();
   $('quiz-view').classList.add('hidden');
   $('summary-view').classList.add('hidden');
   $('home-view').classList.remove('hidden');
@@ -758,6 +769,7 @@ const MODE_LABELS = {
 };
 
 function renderQuizCard(word, mode, pool) {
+  hideVirtualKeyboard(); // 매 문제마다 깨끗이 초기화 - 타이핑 모드면 buildTypingUI가 다시 띄움
   const card = $('quiz-card');
   card.innerHTML = '';
 
@@ -822,8 +834,7 @@ function buildTypingUI(card, promptHtml, subtext, targetValue, word) {
     renderDisplay();
   }
 
-  const keyboard = buildVirtualKeyboard(pressKey, backspace);
-  card.appendChild(keyboard);
+  const keyboard = showVirtualKeyboard(pressKey, backspace);
 
   const actions = document.createElement('div');
   actions.className = 'quiz-actions';
@@ -854,6 +865,27 @@ function buildTypingUI(card, promptHtml, subtext, targetValue, word) {
 
   submitBtn.addEventListener('click', submit);
   nextBtn.addEventListener('click', goToNextQuestion);
+}
+
+// 화면 하단에 고정된 키보드 도크(#vk-dock)에 키를 채워 넣고 보여준다. 진짜 폰
+// 키보드처럼 "이 위로는 화면, 아래는 키보드"가 되도록, 키보드 높이만큼 main의
+// 아래쪽 여백을 동적으로 띄워서 내용이 키보드 뒤에 가리지 않게 한다.
+function showVirtualKeyboard(onKey, onBackspace) {
+  const dock = $('vk-dock');
+  dock.innerHTML = '';
+  dock.appendChild(buildVirtualKeyboard(onKey, onBackspace));
+  dock.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    document.querySelector('main').style.paddingBottom = dock.offsetHeight + 24 + 'px';
+  });
+  return dock;
+}
+
+function hideVirtualKeyboard() {
+  const dock = $('vk-dock');
+  dock.classList.add('hidden');
+  dock.innerHTML = '';
+  document.querySelector('main').style.paddingBottom = '';
 }
 
 // 테마에 맞춘 자체 QWERTY 키보드. 네이티브 입력 요소를 아예 안 쓰므로 폰 키보드가
