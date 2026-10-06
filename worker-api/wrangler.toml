@@ -7,7 +7,7 @@ compatibility_date = "2024-11-01"
 # (출력에 나오는 id를 복사해서 아래 id = "..." 자리에 붙여넣기)
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "3857901711a04133a2e825ca4cf8b978"
 
 # 아래 값들은 여기 파일에 직접 쓰지 말고 반드시 시크릿으로 등록하세요:
 #   wrangler secret put GOOGLE_CLIENT_ID     (PWA index.html과 동일한 OAuth 클라이언트 ID)
