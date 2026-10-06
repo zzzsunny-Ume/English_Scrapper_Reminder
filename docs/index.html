@@ -246,7 +246,6 @@
       <div class="title">📚 <span id="header-title-text">영어표현 복습</span></div>
       <div class="header-actions">
         <button id="push-toggle-btn" class="icon-btn" title="알림 설정">🔕</button>
-        <button id="logout-btn" class="icon-btn" title="로그아웃">↩︎</button>
       </div>
     </header>
 
@@ -505,13 +504,6 @@ function initGoogleSignIn() {
   google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredentialResponse });
   $('google-signin-btn').innerHTML = '';
   google.accounts.id.renderButton($('google-signin-btn'), { theme: 'filled_white', size: 'large', shape: 'pill', text: 'signin_with' });
-}
-
-function logout() {
-  state.idToken = '';
-  localStorage.removeItem('idToken');
-  if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
-  showLogin('');
 }
 
 // ============================================================
@@ -1068,7 +1060,6 @@ if (/iP(hone|ad|od)/.test(navigator.userAgent) && !window.navigator.standalone) 
 // ============================================================
 // ===== 이벤트 바인딩 =====
 // ============================================================
-$('logout-btn').addEventListener('click', logout);
 $('push-toggle-btn').addEventListener('click', togglePush);
 $('start-review-btn').addEventListener('click', startReview);
 $('back-home-btn').addEventListener('click', backToHome);
