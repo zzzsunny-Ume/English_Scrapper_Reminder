@@ -290,8 +290,8 @@
 
           <label style="font-size:13px; font-weight:700; color:var(--muted); display:block; margin-top:14px;">복습 방식</label>
           <div class="segmented" id="mode-pref-segmented">
-            <button data-pref="adaptive" class="active">한→영 타이핑 (기본)</button>
-            <button data-pref="random">모드 랜덤</button>
+            <button data-pref="word" class="active">WORD</button>
+            <button data-pref="sentence">SENTENCE</button>
           </div>
         </div>
 
@@ -364,7 +364,7 @@ const state = {
   profile: null, // {email, name, exp}
   sources: [],
   selectedSource: localStorage.getItem('selectedSource') || 'common',
-  modePreference: localStorage.getItem('modePreference') || 'adaptive',
+  modePreference: localStorage.getItem('modePreference') || 'word',
   dueData: null,
   queue: [],
   sessionIndex: 0,
@@ -591,21 +591,19 @@ function renderStatusChart(data) {
 // ============================================================
 // ===== 모드 선택 =====
 // ============================================================
-const ALL_MODES = ['kr2en', 'exampleScramble'];
-
 function modeApplicable(mode, word) {
   if (mode === 'exampleScramble') return !!word.example && tokenize(word.example).length >= 3;
   return true; // kr2en은 항상 가능
 }
 
-// 기본은 항상 "한국어 뜻 보고 영어 타이핑"(kr2en). 홈 화면에서 "모드 랜덤"으로
-// 바꾸면 단어(kr2en)/문장 나열(exampleScramble) 두 가지를 섞어서 낸다.
+// WORD(기본) = 항상 한국어 뜻 보고 영어 타이핑(kr2en). SENTENCE = 항상 예문 단어
+// 배열하기(exampleScramble) - 단, 예문이 3단어 미만이라 배열할 수 없는 단어는
+// kr2en으로 자동 대체.
 function pickMode(word) {
-  if (state.modePreference !== 'random') {
-    return 'kr2en';
+  if (state.modePreference === 'sentence' && modeApplicable('exampleScramble', word)) {
+    return 'exampleScramble';
   }
-  const candidates = ALL_MODES.filter((m) => modeApplicable(m, word));
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  return 'kr2en';
 }
 
 // ============================================================
