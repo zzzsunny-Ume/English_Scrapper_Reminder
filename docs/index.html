@@ -162,24 +162,37 @@
   .answer-display.correct { border-color: var(--good); background: #f0fdf4; color: var(--text); }
   .answer-display.wrong { border-color: var(--bad); background: #fef2f2; color: var(--text); }
 
-  /* 테마 전용 가상 키보드 - 네이티브 키보드처럼 화면 하단에 고정 */
+  /* 테마 전용 가상 키보드 - 네이티브 키보드처럼 화면 하단에 고정. iOS/Gboard류
+     모던 키보드를 참고해서 키캡이 살짝 떠 보이도록 그림자(elevation)를 넣고,
+     실제 쿼티 배열처럼 줄마다 조금씩 엇갈리게(stagger) 배치했다. 키 높이도
+     한 뼘 키워서 터치하기 더 편하게 했다. */
   .vk-dock {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-    background: #ece5fb; border-top: 1px solid var(--border);
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
-    box-shadow: 0 -6px 20px rgba(90, 62, 214, 0.15);
+    background: #e3dbf8; border-top: 1px solid var(--border);
+    padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 24px rgba(90, 62, 214, 0.2);
   }
-  .vk { display: flex; flex-direction: column; gap: 6px; }
-  .vk-row { display: flex; gap: 4px; }
+  .vk { display: flex; flex-direction: column; gap: 8px; }
+  .vk-row { display: flex; gap: 6px; }
+  .vk-row-2 { padding: 0 5%; }
+  .vk-row-3 { padding: 0 2.5%; }
   .vk-key {
-    flex: 1; min-width: 0; height: 42px; padding: 0; border-radius: 8px; border: none;
-    background: #ede8fb; color: var(--text); font-size: 15px; font-weight: 700;
-    text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex: 1; min-width: 0; height: 50px; padding: 0; border-radius: 11px; border: none;
+    background: #ffffff; color: var(--text); font-size: 18px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1.5px 0 rgba(90, 62, 214, 0.15), 0 3px 6px rgba(90, 62, 214, 0.12);
+    transition: transform 0.06s ease, background 0.06s ease, box-shadow 0.06s ease;
   }
-  .vk-key:active { background: var(--primary-light); color: white; }
-  .vk-key:disabled { opacity: 0.5; }
-  .vk-key-wide { flex: 1.7; background: #ded5f7; font-size: 15px; text-transform: none; }
-  .vk-key-space { flex: 1; text-transform: none; font-size: 13px; color: var(--muted); }
+  .vk-key:active {
+    background: var(--primary); color: white; transform: translateY(1px) scale(0.96);
+    box-shadow: 0 1px 0 rgba(90, 62, 214, 0.15), 0 1px 2px rgba(90, 62, 214, 0.12);
+  }
+  .vk-key:disabled { opacity: 0.4; box-shadow: none; }
+  .vk-key-wide { flex: 1.5; background: #d9cff3; font-size: 19px; }
+  .vk-key-wide:active { background: var(--primary-dark); }
+  .vk-key-space {
+    flex: 1; font-size: 13px; font-weight: 700; letter-spacing: 3px; color: var(--muted);
+  }
 
   .scramble-answer {
     min-height: 48px; border: 2px dashed var(--border); border-radius: 16px; padding: 8px;
@@ -835,9 +848,10 @@ function buildVirtualKeyboard(onKey, onBackspace) {
   wrap.className = 'vk';
 
   const rows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+  const rowStaggerClass = ['', ' vk-row-2', ' vk-row-3'];
   rows.forEach((letters, i) => {
     const row = document.createElement('div');
-    row.className = 'vk-row';
+    row.className = 'vk-row' + rowStaggerClass[i];
     [...letters].forEach((ch) => {
       const key = document.createElement('button');
       key.type = 'button';
