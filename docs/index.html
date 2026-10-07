@@ -119,7 +119,7 @@
   .stat-box .num { font-size: 20px; font-weight: 800; color: var(--primary); }
   .stat-box .label { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
-  select#source-select {
+  select#source-select, select#daily-goal-select {
     width: 100%; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--border);
     font-size: 15px; background: #faf9ff; margin-top: 8px; color: var(--text);
   }
@@ -134,13 +134,6 @@
     width: 100%; padding: 12px; border-radius: 999px; border: 1.5px solid var(--border); background: white;
     color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer;
   }
-
-  .segmented { display: flex; background: #ede8fb; border-radius: 999px; padding: 3px; margin-top: 8px; }
-  .segmented button {
-    flex: 1; border: none; background: transparent; padding: 9px 4px; border-radius: 999px;
-    font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer;
-  }
-  .segmented button.active { background: white; color: var(--primary); box-shadow: 0 2px 6px rgba(90, 62, 214, 0.15); }
 
   /* ---------- 퀴즈 화면 ---------- */
   .quiz-top-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
@@ -288,11 +281,14 @@
           <label style="font-size:13px; font-weight:700; color:var(--muted);">복습 소스</label>
           <select id="source-select"></select>
 
-          <label style="font-size:13px; font-weight:700; color:var(--muted); display:block; margin-top:14px;">복습 방식</label>
-          <div class="segmented" id="mode-pref-segmented">
-            <button data-pref="word" class="active">WORD</button>
-            <button data-pref="sentence">SENTENCE</button>
-          </div>
+          <label style="font-size:13px; font-weight:700; color:var(--muted); display:block; margin-top:14px;">하루 목표 단어 수</label>
+          <select id="daily-goal-select">
+            <option value="5">5개</option>
+            <option value="10">10개 (추천)</option>
+            <option value="15">15개</option>
+            <option value="20">20개</option>
+            <option value="30">30개</option>
+          </select>
         </div>
 
         <button id="start-review-btn" class="primary-btn">복습 시작하기</button>
@@ -364,7 +360,7 @@ const state = {
   profile: null, // {email, name, exp}
   sources: [],
   selectedSource: localStorage.getItem('selectedSource') || 'common',
-  modePreference: localStorage.getItem('modePreference') || 'word',
+  dailyGoal: Number(localStorage.getItem('dailyGoal')) || 10,
   dueData: null,
   queue: [],
   sessionIndex: 0,
@@ -559,7 +555,8 @@ async function loadDueReviews() {
     : `오늘 복습할 표현이<br><span id="stat-due">${data.dueCount}</span>개 있어요`;
 
   $('start-review-btn').disabled = data.dueCount === 0;
-  $('start-review-btn').textContent = data.dueCount === 0 ? '오늘 복습 완료! 🎉' : `복습 시작하기 (${data.dueCount}개)`;
+  const sessionSize = Math.min(data.dueCount, state.dailyGoal);
+  $('start-review-btn').textContent = data.dueCount === 0 ? '오늘 복습 완료! 🎉' : `복습 시작하기 (${sessionSize}개)`;
 
   renderStatusChart(data);
 }
@@ -596,14 +593,20 @@ function modeApplicable(mode, word) {
   return true; // kr2en은 항상 가능
 }
 
-// WORD(기본) = 항상 한국어 뜻 보고 영어 타이핑(kr2en). SENTENCE = 항상 예문 단어
-// 배열하기(exampleScramble) - 단, 예문이 3단어 미만이라 배열할 수 없는 단어는
-// kr2en으로 자동 대체.
+// 모드를 사람이 고르지 않는다 - 그 단어가 지금 몇 번째 복습 단계(박스)에 있는지로
+// 자동 결정된다. 박스1(막 틀렸거나 한 번도 안 본 단어)은 뜻 보고 영어 타이핑으로
+// "꺼내기" 연습, 박스2는 그걸 예문 속에서 문장 나열로 "쓸 수 있는지" 확인 - 이렇게
+// 타이핑/문장나열을 번갈아 반복하다가, 마지막 박스(장기기억 판정)는 항상 문장
+// 나열로 확인한다. 예문이 3단어 미만이라 나열이 불가능한 단어는 타이핑으로 대체.
+const MODE_BY_BOX = {
+  0: 'kr2en', 1: 'kr2en', 2: 'exampleScramble',
+  3: 'kr2en', 4: 'exampleScramble', 5: 'kr2en', 6: 'exampleScramble',
+};
+
 function pickMode(word) {
-  if (state.modePreference === 'sentence' && modeApplicable('exampleScramble', word)) {
-    return 'exampleScramble';
-  }
-  return 'kr2en';
+  const mode = MODE_BY_BOX[word.box || 0] || 'kr2en';
+  if (mode === 'exampleScramble' && !modeApplicable('exampleScramble', word)) return 'kr2en';
+  return mode;
 }
 
 // ============================================================
@@ -611,7 +614,8 @@ function pickMode(word) {
 // ============================================================
 function startReview() {
   if (!state.dueData || state.dueData.dueCount === 0) return;
-  state.queue = shuffle(state.dueData.due);
+  // 밀린 게 아무리 많아도 하루 목표 개수만큼만 이번 세션에 담는다 - 적정량은 10개.
+  state.queue = shuffle(state.dueData.due).slice(0, state.dailyGoal);
   state.sessionIndex = 0;
   state.sessionStats = { correct: 0, wrong: 0 };
   $('home-view').classList.add('hidden');
@@ -636,14 +640,32 @@ function renderCurrentQuestion() {
 }
 
 function gradeAnswer(word, isCorrect) {
+  // 서버 응답을 기다리지 않고 같은 규칙(맞으면 +1박스, 틀리면 1로 리셋)으로 박스를
+  // 바로 갱신 - 이 단어가 이 세션에서 다시 나올 때 pickMode가 바뀐 박스에 맞는
+  // 모드(타이핑/문장나열)를 바로 보여줄 수 있어야 하기 때문.
+  word.box = isCorrect ? Math.min((word.box || 0) + 1, 6) : 1;
+
   apiGet('submitReview', { key: word.key, correct: String(isCorrect) })
     .then((res) => {
       state.latestStats = res.stats;
     })
     .catch((e) => console.error(e));
 
-  if (isCorrect) state.sessionStats.correct++;
-  else state.sessionStats.wrong++;
+  if (isCorrect) {
+    state.sessionStats.correct++;
+  } else {
+    state.sessionStats.wrong++;
+    requeueWord(word);
+  }
+}
+
+// 틀린 단어는 세션에서 바로 탈락하지 않는다 - "몇 분 후"에 다시 보여주는 걸
+// 흉내내서, 몇 문제 뒤(2~4문제)에 같은 단어를 다시 큐에 끼워 넣는다. 방금
+// 박스1로 리셋됐으니 다시 나올 땐 항상 단어타이핑(pickMode가 박스로 알아서 판단).
+function requeueWord(word) {
+  const gap = 2 + Math.floor(Math.random() * 3);
+  const insertAt = Math.min(state.sessionIndex + gap, state.queue.length);
+  state.queue.splice(insertAt, 0, word);
 }
 
 function goToNextQuestion() {
@@ -1070,12 +1092,14 @@ $('source-select').addEventListener('change', (e) => {
   loadDueReviews();
 });
 
-$('mode-pref-segmented').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-pref]');
-  if (!btn) return;
-  state.modePreference = btn.dataset.pref;
-  localStorage.setItem('modePreference', state.modePreference);
-  Array.from($('mode-pref-segmented').children).forEach((b) => b.classList.toggle('active', b === btn));
+$('daily-goal-select').value = String(state.dailyGoal);
+$('daily-goal-select').addEventListener('change', (e) => {
+  state.dailyGoal = Number(e.target.value) || 10;
+  localStorage.setItem('dailyGoal', String(state.dailyGoal));
+  if (state.dueData) {
+    const sessionSize = Math.min(state.dueData.dueCount, state.dailyGoal);
+    $('start-review-btn').textContent = state.dueData.dueCount === 0 ? '오늘 복습 완료! 🎉' : `복습 시작하기 (${sessionSize}개)`;
+  }
 });
 
 // ============================================================
